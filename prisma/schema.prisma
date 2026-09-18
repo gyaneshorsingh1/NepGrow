@@ -1,0 +1,626 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Local default: SQLite. For production, set provider to "postgresql"
+  // and DATABASE_URL to your Postgres connection (see docker-compose.yml).
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Better Auth ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  isPlatformAdmin Boolean @default(false)
+  status          UserStatus @default(ACTIVE)
+
+  sessions    Session[]
+  accounts    Account[]
+  memberships BusinessMembership[]
+  activityLogs ActivityLog[] @relation("ActivityActor")
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  activeBusinessId String?
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verifications")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+// ─── Platform core ───────────────────────────────────────────
+
+model BusinessCategory {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  domainSlug  String   @unique
+  description String?
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  businesses Business[]
+  modules    Module[]
+  plans      Plan[]
+  templates  WebsiteTemplate[]
+
+  @@map("business_categories")
+}
+
+model Business {
+  id          String         @id @default(cuid())
+  name        String
+  slug        String
+  email       String
+  phone       String?
+  address     String?
+  logo        String?
+  description String?
+  status      BusinessStatus @default(ACTIVE)
+  timezone    String         @default("Asia/Kathmandu")
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  categoryId String
+  category   BusinessCategory @relation(fields: [categoryId], references: [id])
+
+  memberships     BusinessMembership[]
+  roles           Role[]
+  subscription    Subscription?
+  businessModules BusinessModule[]
+  features        BusinessFeature[]
+  activityLogs    ActivityLog[]
+  website         Website?
+  customers       Customer[]
+  facilities      Facility[]
+  bookings        Booking[]
+  membershipProducts MembershipProduct[]
+  membershipsList Membership[]
+  payments        Payment[]
+  staffProfiles   StaffProfile[]
+  availabilityRules AvailabilityRule[]
+
+  @@unique([categoryId, slug])
+  @@index([status])
+  @@index([email])
+  @@map("businesses")
+}
+
+enum BusinessStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+  CANCELLED
+}
+
+enum EntityStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model BusinessMembership {
+  id         String           @id @default(cuid())
+  userId     String
+  businessId String
+  status     MembershipStatus @default(ACTIVE)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  roles    MembershipRole[]
+
+  @@unique([userId, businessId])
+  @@index([businessId])
+  @@map("business_memberships")
+}
+
+enum MembershipStatus {
+  ACTIVE
+  DISABLED
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  moduleKey   String
+  description String?
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@index([moduleKey])
+  @@map("permissions")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  businessId  String?
+  name        String
+  key         String
+  description String?
+  isSystem    Boolean  @default(false)
+  isTemplate  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business?         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  memberships MembershipRole[]
+
+  @@unique([businessId, key])
+  @@index([businessId])
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model MembershipRole {
+  membershipId String
+  roleId       String
+
+  membership BusinessMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  role       Role               @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, roleId])
+  @@map("membership_roles")
+}
+
+model Module {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  categoryId  String?
+  isCore      Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  icon        String?
+  href        String?
+  createdAt   DateTime @default(now())
+
+  category        BusinessCategory? @relation(fields: [categoryId], references: [id])
+  planModules     PlanModule[]
+  businessModules BusinessModule[]
+
+  @@index([categoryId])
+  @@map("modules")
+}
+
+model Plan {
+  id              String   @id @default(cuid())
+  name            String
+  key             String
+  description     String?
+  categoryId      String?
+  priceCents      Int      @default(0)
+  currency        String   @default("NPR")
+  billingInterval BillingInterval @default(MONTHLY)
+  limits          Json
+  status          EntityStatus @default(ACTIVE)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  category      BusinessCategory? @relation(fields: [categoryId], references: [id])
+  planModules   PlanModule[]
+  subscriptions Subscription[]
+
+  @@unique([categoryId, key])
+  @@map("plans")
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+  LIFETIME
+}
+
+model PlanModule {
+  planId   String
+  moduleId String
+
+  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@id([planId, moduleId])
+  @@map("plan_modules")
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  businessId String            @unique
+  planId    String
+  status    SubscriptionStatus @default(ACTIVE)
+  startDate DateTime           @default(now())
+  endDate   DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  plan     Plan     @relation(fields: [planId], references: [id])
+
+  @@index([planId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  TRIAL
+}
+
+model BusinessModule {
+  id         String   @id @default(cuid())
+  businessId String
+  moduleId   String
+  enabled    Boolean  @default(true)
+  source     ModuleSource @default(PLAN)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  module   Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, moduleId])
+  @@index([businessId])
+  @@map("business_modules")
+}
+
+enum ModuleSource {
+  PLAN
+  OVERRIDE
+}
+
+model BusinessFeature {
+  id         String   @id @default(cuid())
+  businessId String
+  key        String
+  enabled    Boolean  @default(true)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, key])
+  @@map("business_features")
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  businessId String?
+  userId     String?
+  action     String
+  module     String?
+  entity     String?
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  user     User?     @relation("ActivityActor", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt])
+  @@index([action])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// ─── Website engine ──────────────────────────────────────────
+
+model WebsiteTemplate {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  categoryId  String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  category BusinessCategory? @relation(fields: [categoryId], references: [id])
+  websites Website[]
+
+  @@map("website_templates")
+}
+
+model WebsiteTheme {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  name      String
+  tokens    Json?
+  createdAt DateTime @default(now())
+
+  websites Website[]
+
+  @@map("website_themes")
+}
+
+model Website {
+  id           String  @id @default(cuid())
+  businessId   String  @unique
+  templateId   String
+  themeId      String?
+  customDomain String? @unique
+  content      Json?
+  seoTitle     String?
+  seoDescription String?
+  indexable    Boolean @default(true)
+  published    Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  template WebsiteTemplate  @relation(fields: [templateId], references: [id])
+  theme    WebsiteTheme?    @relation(fields: [themeId], references: [id])
+
+  @@map("websites")
+}
+
+// ─── Sports vertical ─────────────────────────────────────────
+
+model Customer {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  email      String?
+  phone      String?
+  notes      String?
+  status     EntityStatus @default(ACTIVE)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  bookings    Booking[]
+  memberships Membership[]
+  payments    Payment[]
+
+  @@index([businessId])
+  @@index([businessId, email])
+  @@map("customers")
+}
+
+model Facility {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  sport       String
+  description String?
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  courts   Court[]
+
+  @@index([businessId])
+  @@map("facilities")
+}
+
+model Court {
+  id          String   @id @default(cuid())
+  businessId  String
+  facilityId  String
+  name        String
+  capacity    Int?
+  hourlyRateCents Int @default(0)
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+  availabilityRules AvailabilityRule[]
+
+  @@index([facilityId])
+  @@index([businessId])
+  @@map("courts")
+}
+
+model AvailabilityRule {
+  id         String   @id @default(cuid())
+  businessId String
+  courtId    String?
+  dayOfWeek  Int
+  startTime  String
+  endTime    String
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  court    Court?   @relation(fields: [courtId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([courtId])
+  @@map("availability_rules")
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  businessId  String
+  courtId     String
+  customerId  String?
+  startAt     DateTime
+  endAt       DateTime
+  status      BookingStatus @default(CONFIRMED)
+  notes       String?
+  totalCents  Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  court    Court     @relation(fields: [courtId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  payments Payment[]
+
+  @@index([businessId, startAt])
+  @@index([courtId, startAt, endAt])
+  @@index([status])
+  @@map("bookings")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model MembershipProduct {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  description String?
+  priceCents  Int      @default(0)
+  durationDays Int     @default(30)
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+
+  @@index([businessId])
+  @@map("membership_products")
+}
+
+model Membership {
+  id         String   @id @default(cuid())
+  businessId String
+  customerId String
+  productId  String
+  startDate  DateTime
+  endDate    DateTime
+  status     MembershipLifecycle @default(ACTIVE)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  MembershipProduct @relation(fields: [productId], references: [id])
+
+  @@index([businessId])
+  @@index([customerId])
+  @@map("memberships")
+}
+
+enum MembershipLifecycle {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  businessId  String
+  customerId  String?
+  bookingId   String?
+  amountCents Int
+  currency    String        @default("NPR")
+  method      String?
+  status      PaymentStatus @default(COMPLETED)
+  reference   String?
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  booking  Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt])
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+model StaffProfile {
+  id         String   @id @default(cuid())
+  businessId String
+  userId     String?
+  name       String
+  email      String?
+  phone      String?
+  title      String?
+  status     EntityStatus @default(ACTIVE)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@map("staff_profiles")
+}
