@@ -1,5 +1,8 @@
+import Link from "next/link";
+
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -8,44 +11,41 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { resolveTenantContext } from "@/lib/authorization/context";
-import { prisma } from "@/lib/db";
-import { formatMoney } from "@/lib/utils";
+import {
+  authorize,
+  requireModule,
+  resolveTenantContext,
+} from "@/lib/authorization/context";
+import { formatTenantMoney } from "@/lib/utils";
 import { listBookings } from "@/server/services/sports";
 
-import { CreateBookingForm } from "./create-booking-form";
+import { BookingStatusActions } from "./booking-status-actions";
 
 export const metadata = { title: "Bookings" };
 
 export default async function BookingsPage() {
   const ctx = await resolveTenantContext();
-  const [bookings, courts, customers] = await Promise.all([
-    listBookings(ctx),
-    prisma.court.findMany({
-      where: { businessId: ctx.businessId, status: "ACTIVE" },
-      include: { facility: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.customer.findMany({
-      where: { businessId: ctx.businessId, status: "ACTIVE" },
-      orderBy: { name: "asc" },
-      take: 200,
-    }),
-  ]);
+  await requireModule(ctx, "bookings");
+  await authorize(ctx, "view", "bookings", "bookings");
+
+  const bookings = await listBookings(ctx);
+
+  const canCreate = ctx.ability.can("create", "bookings");
+  const canCancel = ctx.ability.can("cancel", "bookings");
+  const canUpdate = ctx.ability.can("update", "bookings");
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Bookings"
         description="Court reservations for your customers."
-      />
-      <CreateBookingForm
-        courts={courts.map((c) => ({
-          id: c.id,
-          name: c.name,
-          facilityName: c.facility.name,
-        }))}
-        customers={customers.map((c) => ({ id: c.id, name: c.name }))}
+        actions={
+          canCreate ? (
+            <Button asChild>
+              <Link href="/app/bookings/new">+ Create Booking</Link>
+            </Button>
+          ) : null
+        }
       />
       <div className="rounded-xl border border-border bg-card">
         <Table>
@@ -56,6 +56,7 @@ export default async function BookingsPage() {
               <TableHead>Customer</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -68,9 +69,17 @@ export default async function BookingsPage() {
                   {b.court.facility.name} · {b.court.name}
                 </TableCell>
                 <TableCell>{b.customer?.name ?? "Walk-in"}</TableCell>
-                <TableCell>{formatMoney(b.totalCents)}</TableCell>
+                <TableCell>{formatTenantMoney(b.totalCents, ctx)}</TableCell>
                 <TableCell>
                   <StatusBadge status={b.status} />
+                </TableCell>
+                <TableCell>
+                  <BookingStatusActions
+                    bookingId={b.id}
+                    status={b.status}
+                    canCancel={canCancel}
+                    canUpdate={canUpdate}
+                  />
                 </TableCell>
               </TableRow>
             ))}

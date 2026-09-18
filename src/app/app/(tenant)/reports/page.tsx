@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
 import { resolveTenantContext } from "@/lib/authorization/context";
-import { formatMoney } from "@/lib/utils";
+import { formatTenantMoney } from "@/lib/utils";
 import { getSportsReport } from "@/server/services/sports";
 
 import { ReportsCharts } from "./reports-charts";
@@ -67,7 +67,7 @@ export default async function ReportsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {formatMoney(report.revenueCents)}
+            {formatTenantMoney(report.revenueCents, ctx)}
           </CardContent>
         </Card>
       </div>

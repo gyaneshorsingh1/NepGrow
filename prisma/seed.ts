@@ -26,10 +26,16 @@ const PERMISSIONS = [
   ["memberships.create", "Create Memberships", "memberships"],
   ["memberships.update", "Update Memberships", "memberships"],
   ["memberships.delete", "Delete Memberships", "memberships"],
+  ["memberships.assign", "Assign Memberships", "memberships"],
+  ["memberships.cancel", "Cancel Memberships", "memberships"],
   ["payments.view", "View Payments", "payments"],
   ["payments.create", "Create Payments", "payments"],
   ["payments.update", "Update Payments", "payments"],
   ["payments.refund", "Refund Payments", "payments"],
+  ["accounting.view", "View Accounting", "accounting"],
+  ["accounting.create", "Create Accounting Entries", "accounting"],
+  ["accounting.update", "Update Accounting Entries", "accounting"],
+  ["accounting.delete", "Delete Accounting Entries", "accounting"],
   ["staff.view", "View Staff", "staff"],
   ["staff.create", "Create Staff", "staff"],
   ["staff.update", "Update Staff", "staff"],
@@ -40,10 +46,13 @@ const PERMISSIONS = [
   ["users.view", "View Users", "users"],
   ["users.create", "Create Users", "users"],
   ["users.update", "Update Users", "users"],
+  ["users.disable", "Disable Users", "users"],
   ["roles.view", "View Roles", "roles"],
   ["roles.create", "Create Roles", "roles"],
   ["roles.update", "Update Roles", "roles"],
   ["roles.delete", "Delete Roles", "roles"],
+  ["permissions.view", "View Permissions", "permissions"],
+  ["permissions.manage", "Manage Permissions", "permissions"],
 ] as const;
 
 async function main() {
@@ -57,20 +66,100 @@ async function main() {
 
   const sports = await prisma.businessCategory.upsert({
     where: { slug: "sports-center" },
-    update: {},
+    update: {
+      name: "Sports Facility & Recreation",
+      description: "Sports facilities, courts, turfs, and recreation centers",
+    },
     create: {
-      name: "Sports Center",
+      name: "Sports Facility & Recreation",
       slug: "sports-center",
       domainSlug: "sports",
-      description: "Sports centers, courts, and facility booking",
+      description: "Sports facilities, courts, turfs, and recreation centers",
     },
   });
+
+  const categorySeeds = [
+    {
+      slug: "wellness-spa",
+      name: "Wellness & Spa",
+      domainSlug: "spa",
+      description: "Spas, saunas, therapy centers, and wellness retreats",
+    },
+    {
+      slug: "fitness-gym",
+      name: "Fitness Gym",
+      domainSlug: "fitness",
+      description: "Gyms, personal training studios, and crossfit boxes",
+    },
+    {
+      slug: "restaurant-cafe",
+      name: "Restaurant & Cafe",
+      domainSlug: "restaurant",
+      description: "Restaurants, cafes, bakeries, and food outlets",
+    },
+    {
+      slug: "education-training",
+      name: "Education & Training",
+      domainSlug: "education",
+      description: "Coaching centers, academies, and training institutes",
+    },
+    {
+      slug: "beauty-salon",
+      name: "Beauty Salon",
+      domainSlug: "beauty",
+      description: "Salons, barbershops, and nail studios",
+    },
+  ];
+
+  for (const cat of categorySeeds) {
+    await prisma.businessCategory.upsert({
+      where: { slug: cat.slug },
+      update: {
+        name: cat.name,
+        domainSlug: cat.domainSlug,
+        description: cat.description,
+        status: "ACTIVE",
+      },
+      create: {
+        name: cat.name,
+        slug: cat.slug,
+        domainSlug: cat.domainSlug,
+        description: cat.description,
+        status: "ACTIVE",
+      },
+    });
+  }
+
+  const sportsSubcategories = [
+    { name: "Football Turf", slug: "football-turf" },
+    { name: "Futsal", slug: "futsal" },
+    { name: "Tennis", slug: "tennis" },
+    { name: "Badminton", slug: "badminton" },
+    { name: "Gym / Fitness", slug: "gym-fitness" },
+    { name: "Multi-sport", slug: "multi-sport" },
+  ];
+
+  for (const sub of sportsSubcategories) {
+    await prisma.businessSubcategory.upsert({
+      where: {
+        categoryId_slug: { categoryId: sports.id, slug: sub.slug },
+      },
+      update: { name: sub.name, status: "ACTIVE" },
+      create: {
+        categoryId: sports.id,
+        name: sub.name,
+        slug: sub.slug,
+        status: "ACTIVE",
+      },
+    });
+  }
 
   const coreModules = [
     { key: "dashboard", name: "Dashboard", isCore: true, href: "/app", sortOrder: 0, icon: "LayoutDashboard" },
     { key: "customers", name: "Customers", isCore: true, href: "/app/customers", sortOrder: 10, icon: "Users" },
     { key: "staff", name: "Staff", isCore: true, href: "/app/staff", sortOrder: 20, icon: "UserCog" },
     { key: "payments", name: "Payments", isCore: true, href: "/app/payments", sortOrder: 30, icon: "Wallet" },
+    { key: "accounting", name: "Accounting", isCore: true, href: "/app/accounting", sortOrder: 35, icon: "BookOpen" },
     { key: "reports", name: "Reports", isCore: true, href: "/app/reports", sortOrder: 40, icon: "BarChart3" },
     { key: "settings", name: "Settings", isCore: true, href: "/app/settings", sortOrder: 100, icon: "Settings" },
   ];
@@ -101,7 +190,7 @@ async function main() {
   const allModules = await prisma.module.findMany();
   const byKey = Object.fromEntries(allModules.map((m) => [m.key, m]));
 
-  const starterKeys = ["dashboard", "customers", "facilities", "courts", "bookings", "payments", "settings"];
+  const starterKeys = ["dashboard", "customers", "facilities", "courts", "bookings", "payments", "accounting", "settings"];
   const proKeys = [...starterKeys, "memberships", "staff", "reports"];
 
   const starter = await prisma.plan.upsert({
@@ -112,7 +201,7 @@ async function main() {
       key: "sports-starter",
       categoryId: sports.id,
       description: "Essential booking tools",
-      priceCents: 499900,
+      priceCents: 4999,
       limits: { maxCustomers: 500, maxFacilities: 3, maxStaff: 5 },
       sortOrder: 1,
     },
@@ -126,7 +215,7 @@ async function main() {
       key: "sports-pro",
       categoryId: sports.id,
       description: "Full sports center suite",
-      priceCents: 999900,
+      priceCents: 9999,
       limits: { maxCustomers: 5000, maxFacilities: 20, maxStaff: 50 },
       sortOrder: 2,
     },
@@ -145,6 +234,36 @@ async function main() {
       .filter((k) => byKey[k])
       .map((k) => ({ planId: pro.id, moduleId: byKey[k].id })),
   });
+
+  // Sync PLAN business modules for existing tenants so new catalog modules appear
+  const subscriptions = await prisma.subscription.findMany({
+    select: {
+      businessId: true,
+      plan: { select: { planModules: { select: { moduleId: true } } } },
+    },
+  });
+  for (const sub of subscriptions) {
+    const planModuleIds = sub.plan.planModules.map((pm) => pm.moduleId);
+    const existing = await prisma.businessModule.findMany({
+      where: { businessId: sub.businessId },
+    });
+    const overrideIds = new Set(
+      existing.filter((m) => m.source === "OVERRIDE").map((m) => m.moduleId),
+    );
+    await prisma.businessModule.deleteMany({
+      where: { businessId: sub.businessId, source: "PLAN" },
+    });
+    await prisma.businessModule.createMany({
+      data: planModuleIds
+        .filter((id) => !overrideIds.has(id))
+        .map((moduleId) => ({
+          businessId: sub.businessId,
+          moduleId,
+          enabled: true,
+          source: "PLAN" as const,
+        })),
+    });
+  }
 
   const allPermissions = await prisma.permission.findMany();
   const ownerPerms = allPermissions.map((p) => p.id);
@@ -191,6 +310,21 @@ async function main() {
     },
   });
 
+  // Keep existing business Owner roles in sync with the full permission catalog
+  const businessOwnerRoles = await prisma.role.findMany({
+    where: { key: "owner", isSystem: true, businessId: { not: null } },
+    select: { id: true },
+  });
+  for (const role of businessOwnerRoles) {
+    await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+    await prisma.rolePermission.createMany({
+      data: ownerPerms.map((permissionId) => ({
+        roleId: role.id,
+        permissionId,
+      })),
+    });
+  }
+
   await prisma.websiteTemplate.upsert({
     where: { key: "sports-default" },
     update: {},
@@ -216,35 +350,88 @@ async function main() {
     },
   });
 
+  const currencies = [
+    { code: "NPR", name: "Nepalese Rupee", symbol: "Rs.", decimals: 2, sortOrder: 0 },
+    { code: "INR", name: "Indian Rupee", symbol: "₹", decimals: 2, sortOrder: 1 },
+    { code: "USD", name: "US Dollar", symbol: "$", decimals: 2, sortOrder: 2 },
+    { code: "EUR", name: "Euro", symbol: "€", decimals: 2, sortOrder: 3 },
+    { code: "GBP", name: "British Pound", symbol: "£", decimals: 2, sortOrder: 4 },
+    { code: "AED", name: "UAE Dirham", symbol: "د.إ", decimals: 2, sortOrder: 5 },
+    { code: "AUD", name: "Australian Dollar", symbol: "A$", decimals: 2, sortOrder: 6 },
+    { code: "CAD", name: "Canadian Dollar", symbol: "C$", decimals: 2, sortOrder: 7 },
+    { code: "JPY", name: "Japanese Yen", symbol: "¥", decimals: 0, sortOrder: 8 },
+    { code: "CNY", name: "Chinese Yuan", symbol: "¥", decimals: 2, sortOrder: 9 },
+  ] as const;
+
+  for (const c of currencies) {
+    await prisma.currency.upsert({
+      where: { code: c.code },
+      update: {
+        name: c.name,
+        symbol: c.symbol,
+        decimals: c.decimals,
+        sortOrder: c.sortOrder,
+        status: "ACTIVE",
+      },
+      create: {
+        code: c.code,
+        name: c.name,
+        symbol: c.symbol,
+        decimals: c.decimals,
+        sortOrder: c.sortOrder,
+        status: "ACTIVE",
+      },
+    });
+  }
+
   const adminEmail = "admin@nepgrow.com";
-  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
+  const seedPassword = "password";
+  const hashed = await hashPassword(seedPassword);
+  let existingAdmin = await prisma.user.findUnique({
+    where: { email: adminEmail },
+    include: { accounts: true },
+  });
+
   if (!existingAdmin) {
-    const hashed = await hashPassword("Admin123!");
-    await prisma.user.create({
+    existingAdmin = await prisma.user.create({
       data: {
         name: "NepGrow Admin",
         email: adminEmail,
         emailVerified: true,
         isPlatformAdmin: true,
         status: "ACTIVE",
-        accounts: {
-          create: {
-            accountId: adminEmail,
-            providerId: "credential",
-            password: hashed,
-          },
-        },
       },
+      include: { accounts: true },
     });
-  } else if (!existingAdmin.isPlatformAdmin) {
+  } else {
     await prisma.user.update({
       where: { id: existingAdmin.id },
-      data: { isPlatformAdmin: true },
+      data: { isPlatformAdmin: true, status: "ACTIVE" },
+    });
+  }
+
+  // Better Auth requires credential accountId === user.id (not email)
+  const adminAccount = await prisma.account.findFirst({
+    where: { userId: existingAdmin.id, providerId: "credential" },
+  });
+  if (adminAccount) {
+    await prisma.account.update({
+      where: { id: adminAccount.id },
+      data: { password: hashed, accountId: existingAdmin.id },
+    });
+  } else {
+    await prisma.account.create({
+      data: {
+        userId: existingAdmin.id,
+        accountId: existingAdmin.id,
+        providerId: "credential",
+        password: hashed,
+      },
     });
   }
 
   console.log("Seed complete.");
-  console.log("Super Admin: admin@nepgrow.com / Admin123!");
+  console.log(`Super Admin: ${adminEmail} / ${seedPassword}`);
 }
 
 main()

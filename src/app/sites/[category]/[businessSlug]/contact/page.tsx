@@ -1,10 +1,21 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { businessWebsiteMetadata } from "@/features/websites/metadata";
 import { resolveBusinessWebsite } from "@/features/websites/resolve";
 import { AppError } from "@/lib/errors";
 import { SportsWebsiteLayout } from "@/templates/sports/layout";
 
 type Params = Promise<{ category: string; businessSlug: string }>;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { category, businessSlug } = await params;
+  return businessWebsiteMetadata(category, businessSlug, "Contact");
+}
 
 export default async function PublicContactPage({
   params,

@@ -96,12 +96,30 @@ model BusinessCategory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  businesses Business[]
-  modules    Module[]
-  plans      Plan[]
-  templates  WebsiteTemplate[]
+  businesses    Business[]
+  subcategories BusinessSubcategory[]
+  modules       Module[]
+  plans         Plan[]
+  templates     WebsiteTemplate[]
 
   @@map("business_categories")
+}
+
+model BusinessSubcategory {
+  id         String       @id @default(cuid())
+  categoryId String
+  name       String
+  slug       String
+  status     EntityStatus @default(ACTIVE)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  category   BusinessCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  businesses Business[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId])
+  @@map("business_subcategories")
 }
 
 model Business {
@@ -115,11 +133,15 @@ model Business {
   description String?
   status      BusinessStatus @default(ACTIVE)
   timezone    String         @default("Asia/Kathmandu")
+  /// ISO 4217 currency code used for all tenant money display
+  currency    String         @default("NPR")
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  categoryId String
-  category   BusinessCategory @relation(fields: [categoryId], references: [id])
+  categoryId    String
+  category      BusinessCategory     @relation(fields: [categoryId], references: [id])
+  subcategoryId String?
+  subcategory   BusinessSubcategory? @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
 
   memberships     BusinessMembership[]
   roles           Role[]
@@ -136,10 +158,13 @@ model Business {
   payments        Payment[]
   staffProfiles   StaffProfile[]
   availabilityRules AvailabilityRule[]
+  cashbookAccounts CashbookAccount[]
+  accountingTransactions AccountingTransaction[]
 
   @@unique([categoryId, slug])
   @@index([status])
   @@index([email])
+  @@index([subcategoryId])
   @@map("businesses")
 }
 
@@ -155,6 +180,22 @@ enum EntityStatus {
   INACTIVE
 }
 
+/// Platform currency catalog (ISO 4217). Businesses pick one for display.
+model Currency {
+  id        String       @id @default(cuid())
+  code      String       @unique
+  name      String
+  symbol    String?
+  decimals  Int          @default(2)
+  status    EntityStatus @default(ACTIVE)
+  sortOrder Int          @default(0)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([status])
+  @@map("currencies")
+}
+
 model BusinessMembership {
   id         String           @id @default(cuid())
   userId     String
@@ -165,7 +206,8 @@ model BusinessMembership {
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  roles    MembershipRole[]
+  roles       MembershipRole[]
+  permissions MembershipPermission[]
 
   @@unique([userId, businessId])
   @@index([businessId])
@@ -185,7 +227,8 @@ model Permission {
   description String?
   createdAt   DateTime @default(now())
 
-  roles RolePermission[]
+  roles        RolePermission[]
+  memberships  MembershipPermission[]
 
   @@index([moduleKey])
   @@map("permissions")
@@ -233,6 +276,25 @@ model MembershipRole {
   @@map("membership_roles")
 }
 
+enum PermissionEffect {
+  ALLOW
+}
+
+model MembershipPermission {
+  id           String           @id @default(cuid())
+  membershipId String
+  permissionId String
+  effect       PermissionEffect @default(ALLOW)
+  createdAt    DateTime         @default(now())
+
+  membership BusinessMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  permission Permission         @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, permissionId])
+  @@index([membershipId])
+  @@map("membership_permissions")
+}
+
 model Module {
   id          String   @id @default(cuid())
   key         String   @unique
@@ -259,7 +321,7 @@ model Plan {
   key             String
   description     String?
   categoryId      String?
-  priceCents      Int      @default(0)
+  priceCents      Float    @default(0)
   currency        String   @default("NPR")
   billingInterval BillingInterval @default(MONTHLY)
   limits          Json
@@ -472,7 +534,7 @@ model Court {
   facilityId  String
   name        String
   capacity    Int?
-  hourlyRateCents Int @default(0)
+  hourlyRateCents Float @default(0)
   status      EntityStatus @default(ACTIVE)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -512,7 +574,7 @@ model Booking {
   endAt       DateTime
   status      BookingStatus @default(CONFIRMED)
   notes       String?
-  totalCents  Int           @default(0)
+  totalCents  Float         @default(0)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -535,40 +597,46 @@ enum BookingStatus {
 }
 
 model MembershipProduct {
-  id          String   @id @default(cuid())
-  businessId  String
-  name        String
-  description String?
-  priceCents  Int      @default(0)
-  durationDays Int     @default(30)
-  status      EntityStatus @default(ACTIVE)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String       @id @default(cuid())
+  businessId   String
+  name         String
+  description  String?
+  priceCents   Float        @default(0)
+  durationDays Int          @default(30)
+  benefits     Json?
+  status       EntityStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   memberships Membership[]
 
   @@index([businessId])
+  @@index([businessId, status])
   @@map("membership_products")
 }
 
 model Membership {
-  id         String   @id @default(cuid())
+  id         String              @id @default(cuid())
   businessId String
   customerId String
   productId  String
   startDate  DateTime
   endDate    DateTime
+  /// Price agreed at assignment time (snapshot; not live product price)
+  priceCents Float               @default(0)
   status     MembershipLifecycle @default(ACTIVE)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
 
   business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   customer Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
   product  MembershipProduct @relation(fields: [productId], references: [id])
+  payment  Payment?
 
   @@index([businessId])
   @@index([customerId])
+  @@index([businessId, status])
   @@map("memberships")
 }
 
@@ -579,22 +647,24 @@ enum MembershipLifecycle {
 }
 
 model Payment {
-  id          String        @id @default(cuid())
-  businessId  String
-  customerId  String?
-  bookingId   String?
-  amountCents Int
-  currency    String        @default("NPR")
-  method      String?
-  status      PaymentStatus @default(COMPLETED)
-  reference   String?
-  notes       String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id           String        @id @default(cuid())
+  businessId   String
+  customerId   String?
+  bookingId    String?
+  membershipId String?       @unique
+  amountCents  Float
+  currency     String        @default("NPR")
+  method       String?
+  status       PaymentStatus @default(COMPLETED)
+  reference    String?
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  booking  Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer   Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  booking    Booking?    @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  membership Membership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
 
   @@index([businessId, createdAt])
   @@map("payments")
@@ -623,4 +693,60 @@ model StaffProfile {
 
   @@index([businessId])
   @@map("staff_profiles")
+}
+
+// ─── Accounting ──────────────────────────────────────────────
+
+enum CashbookAccountType {
+  CASH
+  BANK
+  WALLET
+  OTHER
+}
+
+model CashbookAccount {
+  id                  String              @id @default(cuid())
+  businessId          String
+  name                String
+  type                CashbookAccountType @default(CASH)
+  openingBalanceCents Float               @default(0)
+  currency            String              @default("NPR")
+  status              EntityStatus        @default(ACTIVE)
+  notes               String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  business     Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactions AccountingTransaction[]
+
+  @@index([businessId, status])
+  @@map("cashbook_accounts")
+}
+
+enum AccountingTxnType {
+  INCOME
+  EXPENSE
+}
+
+model AccountingTransaction {
+  id          String           @id @default(cuid())
+  businessId  String
+  accountId   String
+  type        AccountingTxnType
+  amountCents Float
+  currency    String           @default("NPR")
+  category    String?
+  description String?
+  reference   String?
+  occurredAt  DateTime         @default(now())
+  paymentId   String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  account  CashbookAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, occurredAt])
+  @@index([accountId, occurredAt])
+  @@map("accounting_transactions")
 }

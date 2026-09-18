@@ -10,17 +10,36 @@ import {
   createCourtSchema,
   createCustomerSchema,
   createFacilitySchema,
-  createMembershipProductSchema,
   createPaymentSchema,
+  createAvailabilityRuleSchema,
+  updateBookingStatusSchema,
+  updateCustomerSchema,
+  deleteCustomerSchema,
+  updateFacilitySchema,
+  deleteFacilitySchema,
+  updateCourtSchema,
+  deleteCourtSchema,
+  refundPaymentSchema,
+  createStaffSchema,
+  updateStaffSchema,
 } from "@/lib/validation/schemas";
 import {
   createBooking,
   createCourt,
   createCustomer,
   createFacility,
-  createMembershipProduct,
   createPayment,
   createStaff,
+  updateStaff,
+  createAvailabilityRule,
+  updateBookingStatus,
+  updateCustomer,
+  deleteCustomer,
+  updateFacility,
+  deleteFacility,
+  updateCourt,
+  deleteCourt,
+  refundPayment,
 } from "@/server/services/sports";
 
 export async function createCustomerAction(
@@ -34,6 +53,7 @@ export async function createCustomerAction(
       email: input.email || undefined,
       phone: input.phone,
       notes: input.notes,
+      status: input.status,
     });
     revalidatePath("/app/customers");
     return { ok: true, data: { id: customer.id } };
@@ -68,6 +88,7 @@ export async function createCourtAction(
       name: input.name,
       capacity: input.capacity,
       hourlyRateCents: input.hourlyRateCents,
+      status: input.status,
     });
     revalidatePath("/app/courts");
     revalidatePath("/app/facilities");
@@ -93,6 +114,7 @@ export async function createBookingAction(
       endAt: input.endAt,
       notes: input.notes,
       totalCents: input.totalCents,
+      status: input.status,
     });
     revalidatePath("/app/bookings");
     return { ok: true, data: { id: booking.id } };
@@ -111,31 +133,14 @@ export async function createPaymentAction(
       amountCents: input.amountCents,
       customerId: input.customerId,
       bookingId: input.bookingId,
+      membershipId: input.membershipId,
       method: input.method,
       reference: input.reference,
       notes: input.notes,
+      cashbookAccountId: input.cashbookAccountId,
     });
     revalidatePath("/app/payments");
     return { ok: true, data: { id: payment.id } };
-  } catch (error) {
-    return { ok: false, error: toErrorMessage(error) };
-  }
-}
-
-export async function createMembershipProductAction(
-  raw: unknown,
-): Promise<ActionResult<{ id: string }>> {
-  try {
-    const ctx = await resolveTenantContext();
-    const input = createMembershipProductSchema.parse(raw);
-    const product = await createMembershipProduct(ctx, {
-      name: input.name,
-      description: input.description,
-      priceCents: input.priceCents,
-      durationDays: input.durationDays,
-    });
-    revalidatePath("/app/memberships");
-    return { ok: true, data: { id: product.id } };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
@@ -146,16 +151,193 @@ export async function createStaffAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const ctx = await resolveTenantContext();
-    const name = String((raw as { name?: string }).name ?? "").trim();
-    if (name.length < 2) return { ok: false, error: "Name is required" };
+    const input = createStaffSchema.parse(raw);
     const staff = await createStaff(ctx, {
-      name,
-      email: (raw as { email?: string }).email || undefined,
-      phone: (raw as { phone?: string }).phone || undefined,
-      title: (raw as { title?: string }).title || undefined,
+      name: input.name,
+      email: input.email || undefined,
+      phone: input.phone,
+      title: input.title,
+      status: input.status,
     });
     revalidatePath("/app/staff");
     return { ok: true, data: { id: staff.id } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function updateStaffAction(
+  raw: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await resolveTenantContext();
+    const input = updateStaffSchema.parse(raw);
+    const staff = await updateStaff(ctx, input.id, {
+      name: input.name,
+      email: input.email || undefined,
+      phone: input.phone,
+      title: input.title,
+      status: input.status,
+    });
+    revalidatePath("/app/staff");
+    return { ok: true, data: { id: staff.id } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function createAvailabilityRuleAction(
+  raw: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await resolveTenantContext();
+    const input = createAvailabilityRuleSchema.parse(raw);
+    const rule = await createAvailabilityRule(ctx, {
+      courtId: input.courtId || undefined,
+      dayOfWeek: input.dayOfWeek,
+      startTime: input.startTime,
+      endTime: input.endTime,
+    });
+    revalidatePath("/app/availability");
+    revalidatePath("/app/bookings");
+    return { ok: true, data: { id: rule.id } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function updateBookingStatusAction(
+  raw: unknown,
+): Promise<ActionResult<{ status: string }>> {
+  try {
+    const ctx = await resolveTenantContext();
+    const input = updateBookingStatusSchema.parse(raw);
+    const booking = await updateBookingStatus(
+      ctx,
+      input.bookingId,
+      input.status,
+    );
+    revalidatePath("/app/bookings");
+    return { ok: true, data: { status: booking.status } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function updateCustomerAction(
+  raw: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await resolveTenantContext();
+    const input = updateCustomerSchema.parse(raw);
+    const customer = await updateCustomer(ctx, input.id, {
+      name: input.name,
+      email: input.email || undefined,
+      phone: input.phone,
+      notes: input.notes,
+      status: input.status,
+    });
+    revalidatePath("/app/customers");
+    return { ok: true, data: { id: customer.id } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function deleteCustomerAction(
+  raw: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await resolveTenantContext();
+    const input = deleteCustomerSchema.parse(raw);
+    const customer = await deleteCustomer(ctx, input.id);
+    revalidatePath("/app/customers");
+    return { ok: true, data: { id: customer.id } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function updateFacilityAction(
+  raw: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await resolveTenantContext();
+    const input = updateFacilitySchema.parse(raw);
+    const facility = await updateFacility(ctx, input.id, {
+      name: input.name,
+      sport: input.sport,
+      description: input.description,
+      status: input.status,
+    });
+    revalidatePath("/app/facilities");
+    revalidatePath("/app/courts");
+    return { ok: true, data: { id: facility.id } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function deleteFacilityAction(
+  raw: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await resolveTenantContext();
+    const input = deleteFacilitySchema.parse(raw);
+    const facility = await deleteFacility(ctx, input.id);
+    revalidatePath("/app/facilities");
+    revalidatePath("/app/courts");
+    return { ok: true, data: { id: facility.id } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function updateCourtAction(
+  raw: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await resolveTenantContext();
+    const input = updateCourtSchema.parse(raw);
+    const court = await updateCourt(ctx, input.id, {
+      facilityId: input.facilityId,
+      name: input.name,
+      capacity: input.capacity,
+      hourlyRateCents: input.hourlyRateCents,
+      status: input.status,
+    });
+    revalidatePath("/app/courts");
+    revalidatePath("/app/facilities");
+    return { ok: true, data: { id: court.id } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function deleteCourtAction(
+  raw: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await resolveTenantContext();
+    const input = deleteCourtSchema.parse(raw);
+    const court = await deleteCourt(ctx, input.id);
+    revalidatePath("/app/courts");
+    revalidatePath("/app/facilities");
+    return { ok: true, data: { id: court.id } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function refundPaymentAction(
+  raw: unknown,
+): Promise<ActionResult<{ id: string; status: string }>> {
+  try {
+    const ctx = await resolveTenantContext();
+    const input = refundPaymentSchema.parse(raw);
+    const payment = await refundPayment(ctx, input.paymentId);
+    revalidatePath("/app/payments");
+    return { ok: true, data: { id: payment.id, status: payment.status } };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }

@@ -1,5 +1,8 @@
+import Link from "next/link";
+
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -9,33 +12,32 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { resolveTenantContext } from "@/lib/authorization/context";
-import { prisma } from "@/lib/db";
-import { formatMoney } from "@/lib/utils";
+import { formatTenantMoney } from "@/lib/utils";
 import { listPayments } from "@/server/services/sports";
 
-import { CreatePaymentForm } from "./create-payment-form";
+import { PaymentRefundButton } from "./payment-refund-button";
 
 export const metadata = { title: "Payments" };
 
 export default async function PaymentsPage() {
   const ctx = await resolveTenantContext();
-  const [payments, customers] = await Promise.all([
-    listPayments(ctx),
-    prisma.customer.findMany({
-      where: { businessId: ctx.businessId },
-      orderBy: { name: "asc" },
-      take: 200,
-    }),
-  ]);
+  const payments = await listPayments(ctx);
+
+  const canCreate = ctx.ability.can("create", "payments");
+  const canRefund = ctx.ability.can("refund", "payments");
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Payments"
         description="Recorded payments for bookings and memberships."
-      />
-      <CreatePaymentForm
-        customers={customers.map((c) => ({ id: c.id, name: c.name }))}
+        actions={
+          canCreate ? (
+            <Button asChild>
+              <Link href="/app/payments/new">+ Record Payment</Link>
+            </Button>
+          ) : null
+        }
       />
       <div className="rounded-xl border border-border bg-card">
         <Table>
@@ -46,6 +48,7 @@ export default async function PaymentsPage() {
               <TableHead>Amount</TableHead>
               <TableHead>Method</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -55,10 +58,22 @@ export default async function PaymentsPage() {
                   {p.createdAt.toLocaleString()}
                 </TableCell>
                 <TableCell>{p.customer?.name ?? "—"}</TableCell>
-                <TableCell>{formatMoney(p.amountCents, p.currency)}</TableCell>
+                <TableCell>
+                  {formatTenantMoney(p.amountCents, {
+                    currency: p.currency || ctx.currency,
+                    currencyDecimals: ctx.currencyDecimals,
+                  })}
+                </TableCell>
                 <TableCell>{p.method ?? "—"}</TableCell>
                 <TableCell>
                   <StatusBadge status={p.status} />
+                </TableCell>
+                <TableCell>
+                  <PaymentRefundButton
+                    paymentId={p.id}
+                    status={p.status}
+                    canRefund={canRefund}
+                  />
                 </TableCell>
               </TableRow>
             ))}
