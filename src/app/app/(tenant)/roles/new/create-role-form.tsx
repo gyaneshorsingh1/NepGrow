@@ -8,27 +8,27 @@ import { toast } from "sonner";
 import type { z } from "zod";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  PermissionMatrix,
+  type PermissionOption,
+} from "@/components/shared/permission-matrix";
 import { createRoleAction } from "@/features/roles/actions";
 import { createRoleSchema } from "@/lib/validation/schemas";
 import { slugify } from "@/lib/utils";
 
 type Values = z.output<typeof createRoleSchema>;
 
-type PermissionOption = {
-  id: string;
-  key: string;
-  name: string;
-  moduleKey: string;
-};
-
 export function CreateRoleForm({
   permissions,
+  actorPermissionKeys,
+  isPlatformAdmin = false,
 }: {
   permissions: PermissionOption[];
+  actorPermissionKeys?: string[];
+  isPlatformAdmin?: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
@@ -41,16 +41,6 @@ export function CreateRoleForm({
       permissionIds: [],
     },
   });
-
-  const grouped = React.useMemo(() => {
-    const map = new Map<string, PermissionOption[]>();
-    for (const p of permissions) {
-      const list = map.get(p.moduleKey) ?? [];
-      list.push(p);
-      map.set(p.moduleKey, list);
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [permissions]);
 
   async function onSubmit(values: Values) {
     setPending(true);
@@ -74,7 +64,7 @@ export function CreateRoleForm({
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
+          <Label htmlFor="name">Role Name</Label>
           <Input
             id="name"
             {...form.register("name")}
@@ -95,52 +85,31 @@ export function CreateRoleForm({
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         <h2 className="text-sm font-semibold">Permissions</h2>
-        {grouped.map(([moduleKey, perms]) => (
-          <div
-            key={moduleKey}
-            className="rounded-xl border border-border bg-card p-4"
-          >
-            <h3 className="mb-3 text-sm font-medium capitalize">{moduleKey}</h3>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {perms.map((p) => {
-                const checked = selected.includes(p.id);
-                return (
-                  <label
-                    key={p.id}
-                    className="flex items-start gap-2 text-sm"
-                  >
-                    <Checkbox
-                      className="mt-0.5"
-                      checked={checked}
-                      onChange={(e) => {
-                        const current = form.getValues("permissionIds");
-                        form.setValue(
-                          "permissionIds",
-                          e.target.checked
-                            ? [...current, p.id]
-                            : current.filter((id) => id !== p.id),
-                        );
-                      }}
-                    />
-                    <span>
-                      <span className="font-medium">{p.name}</span>
-                      <span className="block font-mono text-[11px] text-muted-foreground">
-                        {p.key}
-                      </span>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+        <PermissionMatrix
+          permissions={permissions}
+          value={selected}
+          onChange={(ids) => form.setValue("permissionIds", ids)}
+          disabled={pending}
+          actorPermissionKeys={actorPermissionKeys}
+          isPlatformAdmin={isPlatformAdmin}
+        />
       </div>
 
-      <Button type="submit" disabled={pending}>
-        {pending ? "Creating…" : "Create role"}
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push("/app/roles")}
+          disabled={pending}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={pending}>
+          {pending ? "Creating…" : "Create Role"}
+        </Button>
+      </div>
     </form>
   );
 }

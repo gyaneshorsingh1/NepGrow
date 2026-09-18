@@ -2,13 +2,17 @@ import type { LucideIcon } from "lucide-react";
 import {
   BadgeCheck,
   BarChart3,
+  BookOpen,
   Building2,
   Calendar,
+  Coins,
   FolderTree,
   Grid3x3,
+  Landmark,
   LayoutDashboard,
   Layers,
   Package,
+  Receipt,
   ScrollText,
   Settings,
   Shield,
@@ -22,6 +26,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Users,
   UserCog,
   Wallet,
+  BookOpen,
+  Landmark,
+  Receipt,
   BarChart3,
   Settings,
   Building2,
@@ -33,6 +40,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   ScrollText,
   FolderTree,
   Shield,
+  Coins,
 };
 
 export function resolveIcon(name?: string | null): LucideIcon {

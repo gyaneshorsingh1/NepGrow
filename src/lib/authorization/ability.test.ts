@@ -13,6 +13,13 @@ describe("permissionKeyToRule", () => {
     });
   });
 
+  it("parses disable action", () => {
+    expect(permissionKeyToRule("users.disable")).toEqual({
+      action: "disable",
+      subject: "users",
+    });
+  });
+
   it("returns null for invalid keys", () => {
     expect(permissionKeyToRule("invalid")).toBeNull();
   });
@@ -45,7 +52,39 @@ describe("defineAbilityFor", () => {
     });
     expect(ability.can("view", "customers")).toBe(true);
     expect(ability.can("create", "customers")).toBe(false);
+    expect(ability.can("delete", "customers")).toBe(false);
     expect(ability.can("view", "payments")).toBe(false);
+  });
+
+  it("allows roles/users/permissions without module entitlement", () => {
+    const ability = defineAbilityFor({
+      permissionKeys: ["roles.view", "roles.create", "users.view", "permissions.manage"],
+      enabledModuleKeys: [],
+    });
+    expect(ability.can("view", "roles")).toBe(true);
+    expect(ability.can("create", "roles")).toBe(true);
+    expect(ability.can("view", "users")).toBe(true);
+    expect(ability.can("manage", "permissions")).toBe(true);
+  });
+
+  it("treats direct grants as additive with role keys", () => {
+    const ability = defineAbilityFor({
+      permissionKeys: ["customers.view", "reports.view"],
+      enabledModuleKeys: ["customers", "reports"],
+    });
+    expect(ability.can("view", "customers")).toBe(true);
+    expect(ability.can("view", "reports")).toBe(true);
+  });
+
+  it("denies roles.manage when only roles.view is held", () => {
+    const ability = defineAbilityFor({
+      permissionKeys: ["roles.view"],
+      enabledModuleKeys: [],
+    });
+    expect(ability.can("view", "roles")).toBe(true);
+    expect(ability.can("create", "roles")).toBe(false);
+    expect(ability.can("update", "roles")).toBe(false);
+    expect(ability.can("delete", "roles")).toBe(false);
   });
 });
 
@@ -60,5 +99,10 @@ describe("canAccessModule", () => {
     expect(
       canAccessModule(["customers"], ["bookings.view"], "bookings"),
     ).toBe(false);
+  });
+
+  it("allows roles without enabled module catalog entry", () => {
+    expect(canAccessModule([], ["roles.view"], "roles")).toBe(true);
+    expect(canAccessModule([], ["users.view"], "users")).toBe(true);
   });
 });

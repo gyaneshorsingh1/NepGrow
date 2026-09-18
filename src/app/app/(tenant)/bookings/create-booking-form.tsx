@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,7 +21,7 @@ const formSchema = createBookingSchema
   .extend({
     startAtLocal: z.string().min(1),
     endAtLocal: z.string().min(1),
-    totalCents: z.coerce.number().int().min(0).default(0),
+    totalCents: z.coerce.number().min(0).default(0),
   });
 
 type Values = z.output<typeof formSchema>;
@@ -50,6 +51,7 @@ export function CreateBookingForm({
       endAtLocal: "",
       notes: "",
       totalCents: 0,
+      status: "CONFIRMED",
     },
   });
 
@@ -65,6 +67,7 @@ export function CreateBookingForm({
       endAt: toIso(values.endAtLocal),
       notes: values.notes,
       totalCents: values.totalCents,
+      status: values.status,
     });
     setPending(false);
     if (!result.ok) {
@@ -72,24 +75,14 @@ export function CreateBookingForm({
       return;
     }
     toast.success("Booking created");
-    form.reset({
-      courtId: courts[0]?.id ?? "",
-      customerId: "",
-      customerName: "",
-      customerEmail: "",
-      customerPhone: "",
-      startAtLocal: "",
-      endAtLocal: "",
-      notes: "",
-      totalCents: 0,
-    });
+    router.push("/app/bookings");
     router.refresh();
   }
 
   return (
     <form
       onSubmit={form.handleSubmit(onSubmit)}
-      className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-2"
+      className="grid gap-3 md:grid-cols-2"
     >
       <div className="space-y-2">
         <Label htmlFor="courtId">Court</Label>
@@ -140,7 +133,17 @@ export function CreateBookingForm({
         <Label htmlFor="notes">Notes</Label>
         <Textarea id="notes" rows={2} {...form.register("notes")} />
       </div>
-      <div>
+      <div className="space-y-2">
+        <Label htmlFor="status">Status</Label>
+        <Select id="status" {...form.register("status")}>
+          <option value="CONFIRMED">Confirmed</option>
+          <option value="PENDING">Pending</option>
+        </Select>
+      </div>
+      <div className="flex gap-2 md:col-span-2">
+        <Button asChild type="button" variant="outline" disabled={pending}>
+          <Link href="/app/bookings">Cancel</Link>
+        </Button>
         <Button type="submit" disabled={pending || courts.length === 0}>
           {pending ? "Saving…" : "Create booking"}
         </Button>

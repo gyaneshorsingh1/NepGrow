@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { businessWebsiteMetadata } from "@/features/websites/metadata";
 import { resolveBusinessWebsite } from "@/features/websites/resolve";
 import { AppError } from "@/lib/errors";
 import { SportsWebsiteLayout } from "@/templates/sports/layout";
@@ -8,7 +10,14 @@ import { PublicBookingForm } from "./public-booking-form";
 
 type Params = Promise<{ category: string; businessSlug: string }>;
 
-export const metadata = { title: "Book a court" };
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { category, businessSlug } = await params;
+  return businessWebsiteMetadata(category, businessSlug, "Book");
+}
 
 export default async function PublicBookPage({
   params,

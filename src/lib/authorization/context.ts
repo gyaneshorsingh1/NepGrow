@@ -1,7 +1,9 @@
+import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import {
   defineAbilityFor,
+  isModuleExempt,
   type AppAbility,
 } from "@/lib/authorization/ability";
 import { requireSession } from "@/lib/auth/session";
@@ -14,12 +16,16 @@ export type TenantContext = {
   enabledModuleKeys: string[];
   ability: AppAbility;
   subscriptionActive: boolean;
+  businessName?: string;
+  /** ISO 4217 currency code for this business */
+  currency: string;
+  currencyDecimals: number;
 };
 
 export async function getEnabledModuleKeys(businessId: string): Promise<string[]> {
   const rows = await prisma.businessModule.findMany({
     where: { businessId, enabled: true },
-    include: { module: true },
+    select: { module: { select: { key: true } } },
   });
   return rows.map((r) => r.module.key);
 }
@@ -27,106 +33,172 @@ export async function getEnabledModuleKeys(businessId: string): Promise<string[]
 export async function getPermissionKeysForMembership(
   membershipId: string,
 ): Promise<string[]> {
-  const roles = await prisma.membershipRole.findMany({
-    where: { membershipId },
-    include: {
-      role: {
-        include: {
-          permissions: { include: { permission: true } },
+  const membership = await prisma.businessMembership.findUnique({
+    where: { id: membershipId },
+    select: {
+      roles: {
+        select: {
+          role: {
+            select: {
+              permissions: {
+                select: { permission: { select: { key: true } } },
+              },
+            },
+          },
         },
+      },
+      permissions: {
+        where: { effect: "ALLOW" },
+        select: { permission: { select: { key: true } } },
       },
     },
   });
 
   const keys = new Set<string>();
-  for (const mr of roles) {
+  for (const mr of membership?.roles ?? []) {
     for (const rp of mr.role.permissions) {
       keys.add(rp.permission.key);
     }
   }
+  for (const row of membership?.permissions ?? []) {
+    keys.add(row.permission.key);
+  }
   return [...keys];
 }
 
-export async function resolveTenantContext(
-  businessId?: string | null,
-): Promise<TenantContext> {
-  const session = await requireSession();
-  const userId = session.user.id;
-  const isPlatformAdmin = Boolean(
-    (session.user as { isPlatformAdmin?: boolean }).isPlatformAdmin,
-  );
+/**
+ * Request-scoped tenant context. Layout + page share one resolution.
+ */
+export const resolveTenantContext = cache(
+  async (businessId?: string | null): Promise<TenantContext> => {
+    const session = await requireSession();
+    const userId = session.user.id;
+    const isPlatformAdmin = Boolean(session.user.isPlatformAdmin);
 
-  let resolvedBusinessId =
-    businessId ??
-    (session.session as { activeBusinessId?: string | null }).activeBusinessId ??
-    null;
+    let resolvedBusinessId =
+      businessId ?? session.session.activeBusinessId ?? null;
 
-  if (!resolvedBusinessId && !isPlatformAdmin) {
-    const membership = await prisma.businessMembership.findFirst({
-      where: { userId, status: "ACTIVE" },
-      orderBy: { createdAt: "asc" },
-    });
-    resolvedBusinessId = membership?.businessId ?? null;
-  }
+    let membershipId: string | null = null;
 
-  if (!resolvedBusinessId) {
-    throw new AppError("No active business context", "FORBIDDEN", 403);
-  }
-
-  const business = await prisma.business.findUnique({
-    where: { id: resolvedBusinessId },
-    include: { subscription: true },
-  });
-
-  if (!business) {
-    throw new AppError("Business not found", "NOT_FOUND", 404);
-  }
-
-  if (business.status === "SUSPENDED" && !isPlatformAdmin) {
-    throw new AppError("Business is suspended", "FORBIDDEN", 403);
-  }
-
-  const subscriptionActive =
-    !business.subscription ||
-    business.subscription.status === "ACTIVE" ||
-    business.subscription.status === "TRIAL";
-
-  if (!subscriptionActive && !isPlatformAdmin) {
-    throw new AppError("Subscription is not active", "FORBIDDEN", 403);
-  }
-
-  let permissionKeys: string[] = [];
-  if (isPlatformAdmin) {
-    permissionKeys = ["manage.all"];
-  } else {
-    const membership = await prisma.businessMembership.findUnique({
-      where: {
-        userId_businessId: { userId, businessId: resolvedBusinessId },
-      },
-    });
-    if (!membership || membership.status !== "ACTIVE") {
-      throw new AppError("Not a member of this business", "FORBIDDEN", 403);
+    if (!resolvedBusinessId && !isPlatformAdmin) {
+      const membership = await prisma.businessMembership.findFirst({
+        where: { userId, status: "ACTIVE" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, businessId: true },
+      });
+      resolvedBusinessId = membership?.businessId ?? null;
+      membershipId = membership?.id ?? null;
     }
-    permissionKeys = await getPermissionKeysForMembership(membership.id);
-  }
 
-  const enabledModuleKeys = await getEnabledModuleKeys(resolvedBusinessId);
-  const ability = defineAbilityFor({
-    isPlatformAdmin,
-    permissionKeys,
-    enabledModuleKeys,
-  });
+    if (!resolvedBusinessId) {
+      throw new AppError("No active business context", "FORBIDDEN", 403);
+    }
 
-  return {
-    userId,
-    businessId: resolvedBusinessId,
-    isPlatformAdmin,
-    permissionKeys,
-    enabledModuleKeys,
-    ability,
-    subscriptionActive,
-  };
-}
+    const [business, membership] = await Promise.all([
+      prisma.business.findUnique({
+        where: { id: resolvedBusinessId },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          currency: true,
+          subscription: { select: { status: true } },
+        },
+      }),
+      isPlatformAdmin
+        ? Promise.resolve(null)
+        : membershipId
+          ? prisma.businessMembership.findUnique({
+              where: { id: membershipId },
+              select: { id: true, status: true },
+            })
+          : prisma.businessMembership.findUnique({
+              where: {
+                userId_businessId: {
+                  userId,
+                  businessId: resolvedBusinessId,
+                },
+              },
+              select: { id: true, status: true },
+            }),
+    ]);
+
+    if (!business) {
+      throw new AppError("Business not found", "NOT_FOUND", 404);
+    }
+
+    if (business.status === "SUSPENDED" && !isPlatformAdmin) {
+      throw new AppError("Business is suspended", "FORBIDDEN", 403);
+    }
+
+    const subscriptionActive =
+      !business.subscription ||
+      business.subscription.status === "ACTIVE" ||
+      business.subscription.status === "TRIAL";
+
+    if (!subscriptionActive && !isPlatformAdmin) {
+      throw new AppError("Subscription is not active", "FORBIDDEN", 403);
+    }
+
+    const currencyCode = business.currency || "NPR";
+    const currencyRow = await prisma.currency.findUnique({
+      where: { code: currencyCode },
+      select: { decimals: true },
+    });
+    const currencyDecimals = currencyRow?.decimals ?? 2;
+
+    let permissionKeys: string[] = [];
+    if (isPlatformAdmin) {
+      permissionKeys = ["manage.all"];
+    } else {
+      if (!membership || membership.status !== "ACTIVE") {
+        throw new AppError("Not a member of this business", "FORBIDDEN", 403);
+      }
+      const [perms, modules] = await Promise.all([
+        getPermissionKeysForMembership(membership.id),
+        getEnabledModuleKeys(resolvedBusinessId),
+      ]);
+      permissionKeys = perms;
+      const ability = defineAbilityFor({
+        isPlatformAdmin,
+        permissionKeys,
+        enabledModuleKeys: modules,
+      });
+      return {
+        userId,
+        businessId: resolvedBusinessId,
+        isPlatformAdmin,
+        permissionKeys,
+        enabledModuleKeys: modules,
+        ability,
+        subscriptionActive,
+        businessName: business.name,
+        currency: currencyCode,
+        currencyDecimals,
+      };
+    }
+
+    const enabledModuleKeys = await getEnabledModuleKeys(resolvedBusinessId);
+    const ability = defineAbilityFor({
+      isPlatformAdmin,
+      permissionKeys,
+      enabledModuleKeys,
+    });
+
+    return {
+      userId,
+      businessId: resolvedBusinessId,
+      isPlatformAdmin,
+      permissionKeys,
+      enabledModuleKeys,
+      ability,
+      subscriptionActive,
+      businessName: business.name,
+      currency: currencyCode,
+      currencyDecimals,
+    };
+  },
+);
 
 export async function authorize(
   ctx: TenantContext,
@@ -136,9 +208,7 @@ export async function authorize(
 ) {
   if (moduleKey) {
     const enabled =
-      moduleKey === "dashboard" ||
-      moduleKey === "settings" ||
-      ctx.enabledModuleKeys.includes(moduleKey);
+      isModuleExempt(moduleKey) || ctx.enabledModuleKeys.includes(moduleKey);
     if (!enabled && !ctx.isPlatformAdmin) {
       throw new AppError(`Module "${moduleKey}" is not enabled`, "FORBIDDEN", 403);
     }

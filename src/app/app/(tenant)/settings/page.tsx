@@ -1,5 +1,8 @@
+import Link from "next/link";
+
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,6 +14,9 @@ import {
   resolveTenantContext,
 } from "@/lib/authorization/context";
 import { prisma } from "@/lib/db";
+import { listCurrencies } from "@/server/services/currencies";
+
+import { BusinessCurrencyForm } from "./business-currency-form";
 
 export const metadata = { title: "Settings" };
 
@@ -18,24 +24,51 @@ export default async function SettingsPage() {
   const ctx = await resolveTenantContext();
   await authorize(ctx, "view", "settings", "settings");
 
-  const business = await prisma.business.findUnique({
-    where: { id: ctx.businessId },
-    include: {
-      category: true,
-      subscription: { include: { plan: true } },
-      website: true,
-    },
-  });
+  const canUpdate =
+    ctx.ability.can("update", "settings") || ctx.isPlatformAdmin;
+
+  const [business, currencies] = await Promise.all([
+    prisma.business.findUnique({
+      where: { id: ctx.businessId },
+      include: {
+        category: true,
+        subscription: { include: { plan: true } },
+        website: true,
+      },
+    }),
+    listCurrencies({ activeOnly: true }),
+  ]);
 
   if (!business) {
     return <p className="text-sm text-muted-foreground">Business not found.</p>;
+  }
+
+  // Ensure current currency appears even if inactive in catalog
+  const currencyOptions = [...currencies];
+  if (!currencyOptions.some((c) => c.code === business.currency)) {
+    currencyOptions.unshift({
+      id: "current",
+      code: business.currency,
+      name: business.currency,
+      symbol: null,
+      decimals: 2,
+      status: "ACTIVE",
+      sortOrder: -1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="Business profile and subscription details."
+        description="Business profile, currency, and subscription details."
+        actions={
+          <Button asChild size="sm">
+            <Link href="/app/settings/website">Edit website content</Link>
+          </Button>
+        }
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -75,6 +108,22 @@ export default async function SettingsPage() {
         </Card>
         <Card>
           <CardHeader>
+            <CardTitle>Pricing currency</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BusinessCurrencyForm
+              currentCode={business.currency}
+              currencies={currencyOptions.map((c) => ({
+                code: c.code,
+                name: c.name,
+                symbol: c.symbol,
+              }))}
+              canUpdate={canUpdate}
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
             <CardTitle>Plan & website</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -104,6 +153,9 @@ export default async function SettingsPage() {
                 {business.website?.published ? "Published" : "Unpublished"}
               </p>
             </div>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/app/settings/website">Edit website content</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

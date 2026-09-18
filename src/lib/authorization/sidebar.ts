@@ -1,6 +1,4 @@
-import type { LucideIcon } from "lucide-react";
 import { canAccessModule } from "@/lib/authorization/ability";
-import { resolveIcon } from "@/lib/icons";
 
 export type ModuleNavSource = {
   key: string;
@@ -13,12 +11,13 @@ export type ModuleNavSource = {
 export type SidebarItem = {
   title: string;
   href: string;
-  icon?: LucideIcon;
+  icon?: string;
   moduleKey: string;
 };
 
 /**
  * Build tenant sidebar from enabled modules ∩ permission keys.
+ * Icons are string names so Server Components can pass them to the client shell.
  */
 export function buildSidebarItems(
   enabledModules: ModuleNavSource[],
@@ -31,8 +30,11 @@ export function buildSidebarItems(
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
     .map((mod) => ({
       title: mod.name,
-      href: mod.href || `/app/${mod.key === "dashboard" ? "" : mod.key}`.replace(/\/$/, "") || "/app",
-      icon: resolveIcon(mod.icon),
+      href:
+        mod.href ||
+        `/app/${mod.key === "dashboard" ? "" : mod.key}`.replace(/\/$/, "") ||
+        "/app",
+      icon: mod.icon ?? "LayoutDashboard",
       moduleKey: mod.key,
     }));
 }

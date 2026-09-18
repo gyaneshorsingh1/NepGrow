@@ -12,7 +12,9 @@ export type Actions =
   | "update"
   | "delete"
   | "cancel"
-  | "refund";
+  | "refund"
+  | "disable"
+  | "assign";
 
 export type Subjects =
   | "all"
@@ -23,11 +25,13 @@ export type Subjects =
   | "courts"
   | "memberships"
   | "payments"
+  | "accounting"
   | "staff"
   | "reports"
   | "settings"
   | "users"
   | "roles"
+  | "permissions"
   | "clients"
   | "plans"
   | "modules"
@@ -37,6 +41,46 @@ export type Subjects =
 export type AppAbility = MongoAbility<[Actions, Subjects]>;
 export type AppRawRule = RawRuleOf<AppAbility>;
 
+/** Modules always available for permission assignment / ability (not plan-gated). */
+export const MODULE_EXEMPT_KEYS = [
+  "all",
+  "dashboard",
+  "settings",
+  "roles",
+  "users",
+  "permissions",
+] as const;
+
+export function isModuleExempt(moduleKey: string): boolean {
+  return (MODULE_EXEMPT_KEYS as readonly string[]).includes(moduleKey);
+}
+
+/** Enabled plan modules plus always-available exempt keys. */
+export function assignableModuleKeys(enabledModuleKeys: string[]): string[] {
+  return [...new Set([...enabledModuleKeys, ...MODULE_EXEMPT_KEYS])];
+}
+
+/**
+ * Whether an actor may grant a permission (enable it on a role / user).
+ * Allowed when they have manage.all, hold the exact key, or have any access
+ * to that module — so they can turn Off permissions back On.
+ */
+export function actorCanGrantPermission(
+  actor: { permissionKeys: string[]; isPlatformAdmin?: boolean },
+  permission: { key: string; moduleKey: string },
+): boolean {
+  if (actor.isPlatformAdmin || actor.permissionKeys.includes("manage.all")) {
+    return true;
+  }
+  if (actor.permissionKeys.includes(permission.key)) {
+    return true;
+  }
+  const moduleKey = permission.moduleKey;
+  return actor.permissionKeys.some(
+    (k) => k === `${moduleKey}.manage` || k.startsWith(`${moduleKey}.`),
+  );
+}
+
 const ACTION_MAP: Record<string, Actions> = {
   view: "view",
   create: "create",
@@ -45,6 +89,8 @@ const ACTION_MAP: Record<string, Actions> = {
   cancel: "cancel",
   refund: "refund",
   manage: "manage",
+  disable: "disable",
+  assign: "assign",
 };
 
 /** permission key format: module.action e.g. customers.view */
@@ -74,7 +120,7 @@ export function defineAbilityFor(input: {
     const rule = permissionKeyToRule(key);
     if (!rule) continue;
     const subject = rule.subject as string;
-    if (subject !== "all" && subject !== "dashboard" && subject !== "settings") {
+    if (!isModuleExempt(subject)) {
       if (!enabled.has(subject) && !enabled.has(moduleKeyFromSubject(subject))) {
         continue;
       }
@@ -99,7 +145,7 @@ export function canAccessModule(
   moduleKey: string,
   viewPermission = `${moduleKey}.view`,
 ): boolean {
-  if (!enabledModuleKeys.includes(moduleKey) && moduleKey !== "dashboard" && moduleKey !== "settings") {
+  if (!isModuleExempt(moduleKey) && !enabledModuleKeys.includes(moduleKey)) {
     return false;
   }
   return (

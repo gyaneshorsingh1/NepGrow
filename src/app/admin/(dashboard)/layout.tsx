@@ -1,23 +1,18 @@
 import { redirect } from "next/navigation";
-import {
-  FolderTree,
-  LayoutDashboard,
-  Layers,
-  Package,
-  ScrollText,
-  Users,
-} from "lucide-react";
 
+import { LogoutButton } from "@/components/shared/logout-button";
+import { ThemeToggle } from "@/components/providers/theme-toggle";
 import { DashboardShell } from "@/components/layouts/dashboard-shell";
 import { getSession } from "@/lib/auth/session";
 
 const ADMIN_NAV = [
-  { title: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { title: "Clients", href: "/admin/clients", icon: Users },
-  { title: "Plans", href: "/admin/plans", icon: Package },
-  { title: "Modules", href: "/admin/modules", icon: Layers },
-  { title: "Activity", href: "/admin/activity", icon: ScrollText },
-  { title: "Categories", href: "/admin/categories", icon: FolderTree },
+  { title: "Dashboard", href: "/admin", icon: "LayoutDashboard" },
+  { title: "Clients", href: "/admin/clients", icon: "Users" },
+  { title: "Plans", href: "/admin/plans", icon: "Package" },
+  { title: "Modules", href: "/admin/modules", icon: "Layers" },
+  { title: "Currencies", href: "/admin/currencies", icon: "Coins" },
+  { title: "Activity", href: "/admin/activity", icon: "ScrollText" },
+  { title: "Categories", href: "/admin/categories", icon: "FolderTree" },
 ];
 
 export default async function AdminLayout({
@@ -26,12 +21,14 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const session = await getSession();
-  const user = session?.user as
-    | { isPlatformAdmin?: boolean; name?: string; email?: string }
-    | undefined;
 
-  if (!session?.user || !user?.isPlatformAdmin) {
+  if (!session?.user) {
     redirect("/admin/login");
+  }
+
+  // Tenant users must not enter Super Admin (admin.nepgrow.com surface)
+  if (!session.user.isPlatformAdmin) {
+    redirect("/app");
   }
 
   return (
@@ -42,17 +39,23 @@ export default async function AdminLayout({
           <span className="text-sm font-semibold text-sidebar-primary">
             NepGrow
           </span>
-          <span className="text-xs text-sidebar-foreground/70">Platform</span>
+          <span className="text-xs text-sidebar-foreground/70">
+            Super Admin
+          </span>
         </div>
       }
       topbar={
         <div className="flex w-full items-center justify-between gap-3">
           <p className="truncate text-sm text-muted-foreground">
-            Super admin console
+            Platform console · admin.nepgrow.com
           </p>
-          <p className="truncate text-sm font-medium">
-            {user.name || user.email}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium">
+              {session.user.name || session.user.email}
+            </p>
+            <ThemeToggle />
+            <LogoutButton redirectTo="/admin/login" />
+          </div>
         </div>
       }
     >

@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { createStaffAction } from "@/features/sports/actions";
 
 export function CreateStaffForm() {
@@ -22,6 +24,7 @@ export function CreateStaffForm() {
       email: String(fd.get("email") ?? "") || undefined,
       phone: String(fd.get("phone") ?? "") || undefined,
       title: String(fd.get("title") ?? "") || undefined,
+      status: String(fd.get("status") ?? "ACTIVE"),
     });
     setPending(false);
     if (!result.ok) {
@@ -29,13 +32,12 @@ export function CreateStaffForm() {
       return;
     }
     toast.success("Staff member added");
-    e.currentTarget.reset();
+    router.push("/app/staff");
     router.refresh();
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3 rounded-xl border border-border bg-card p-4">
-      <h3 className="text-sm font-semibold">Add staff</h3>
+    <form onSubmit={onSubmit} className="space-y-3">
       <div className="space-y-2">
         <Label htmlFor="name">Name</Label>
         <Input id="name" name="name" required />
@@ -50,13 +52,27 @@ export function CreateStaffForm() {
           <Input id="phone" name="phone" />
         </div>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="title">Title</Label>
-        <Input id="title" name="title" placeholder="Coach, Front desk…" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="title">Title</Label>
+          <Input id="title" name="title" placeholder="Coach, Front desk…" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="status">Status</Label>
+          <Select id="status" name="status" defaultValue="ACTIVE">
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </Select>
+        </div>
       </div>
-      <Button type="submit" disabled={pending}>
-        {pending ? "Saving…" : "Add staff"}
-      </Button>
+      <div className="flex gap-2">
+        <Button asChild type="button" variant="outline" disabled={pending}>
+          <Link href="/app/staff">Cancel</Link>
+        </Button>
+        <Button type="submit" disabled={pending}>
+          {pending ? "Saving…" : "Add staff"}
+        </Button>
+      </div>
     </form>
   );
 }
