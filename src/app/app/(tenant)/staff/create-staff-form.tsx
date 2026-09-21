@@ -32,7 +32,7 @@ export function CreateStaffForm() {
       return;
     }
     toast.success("Staff member added");
-    router.push("/app/staff");
+    router.push("/app/staff/profiles");
     router.refresh();
   }
 
@@ -67,7 +67,7 @@ export function CreateStaffForm() {
       </div>
       <div className="flex gap-2">
         <Button asChild type="button" variant="outline" disabled={pending}>
-          <Link href="/app/staff">Cancel</Link>
+          <Link href="/app/staff/profiles">Cancel</Link>
         </Button>
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : "Add staff"}

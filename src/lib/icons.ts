@@ -5,8 +5,10 @@ import {
   BookOpen,
   Building2,
   Calendar,
+  Clock,
   Coins,
   FolderTree,
+  Globe,
   Grid3x3,
   Landmark,
   LayoutDashboard,
@@ -34,6 +36,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Building2,
   Grid3x3,
   Calendar,
+  Clock,
   BadgeCheck,
   Package,
   Layers,
@@ -41,6 +44,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   FolderTree,
   Shield,
   Coins,
+  Globe,
 };
 
 export function resolveIcon(name?: string | null): LucideIcon {

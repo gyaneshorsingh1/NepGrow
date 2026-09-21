@@ -96,6 +96,18 @@ function SidebarNav({
           const hasChildren = Boolean(item.children?.length);
           const active = itemOrChildActive(pathname, item);
           const expanded = Boolean(openKeys[item.href]);
+          const children = item.children ?? [];
+          let activeChildHref: string | null = null;
+          for (const child of children) {
+            if (isPathActive(pathname, child.href)) {
+              if (
+                !activeChildHref ||
+                child.href.length > activeChildHref.length
+              ) {
+                activeChildHref = child.href;
+              }
+            }
+          }
 
           return (
             <div key={item.href} className="space-y-0.5">
@@ -139,9 +151,9 @@ function SidebarNav({
 
               {hasChildren && expanded ? (
                 <div className="ml-4 space-y-0.5 border-l border-sidebar-border pl-2">
-                  {item.children!.map((child) => {
+                  {children.map((child) => {
                     const ChildIcon = resolveIcon(child.icon);
-                    const childActive = isPathActive(pathname, child.href);
+                    const childActive = child.href === activeChildHref;
                     return (
                       <Link
                         key={child.href}

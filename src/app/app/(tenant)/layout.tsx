@@ -6,7 +6,7 @@ import { ThemeToggle } from "@/components/providers/theme-toggle";
 import { DashboardShell } from "@/components/layouts/dashboard-shell";
 import { getSession } from "@/lib/auth/session";
 import { resolveTenantContext } from "@/lib/authorization/context";
-import { buildSidebarItems } from "@/lib/authorization/sidebar";
+import { buildTenantSidebar } from "@/lib/authorization/sidebar";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 
@@ -47,96 +47,13 @@ export default async function TenantLayout({
     orderBy: { sortOrder: "asc" },
   });
 
-  const navItems = buildSidebarItems(modules, ctx.permissionKeys);
-
-  const canManageRoles =
-    ctx.isPlatformAdmin ||
-    ctx.permissionKeys.includes("manage.all") ||
-    ctx.permissionKeys.includes("roles.view") ||
-    ctx.permissionKeys.includes("roles.manage");
-
-  if (canManageRoles && !navItems.some((i) => i.href === "/app/roles")) {
-    navItems.push({
-      title: "Roles",
-      href: "/app/roles",
-      icon: "Shield",
-      moduleKey: "roles",
-    });
-  }
-
-  // Availability is part of bookings entitlement (no separate module catalog entry yet)
-  if (
-    ctx.enabledModuleKeys.includes("bookings") &&
-    (ctx.permissionKeys.includes("bookings.view") ||
-      ctx.permissionKeys.includes("bookings.manage") ||
-      ctx.permissionKeys.includes("manage.all")) &&
-    !navItems.some((i) => i.href === "/app/availability")
-  ) {
-    const bookingsIdx = navItems.findIndex((i) => i.href === "/app/bookings");
-    const item = {
-      title: "Availability",
-      href: "/app/availability",
-      icon: "Calendar",
-      moduleKey: "bookings",
-    };
-    if (bookingsIdx >= 0) navItems.splice(bookingsIdx, 0, item);
-    else navItems.push(item);
-  }
-
-  // Plans are part of memberships entitlement (separate list from customer memberships)
-  if (
-    ctx.enabledModuleKeys.includes("memberships") &&
-    (ctx.permissionKeys.includes("memberships.view") ||
-      ctx.permissionKeys.includes("memberships.manage") ||
-      ctx.permissionKeys.includes("manage.all")) &&
-    !navItems.some((i) => i.href === "/app/membership-plans")
-  ) {
-    const membershipsIdx = navItems.findIndex(
-      (i) => i.href === "/app/memberships",
-    );
-    const item = {
-      title: "Plans",
-      href: "/app/membership-plans",
-      icon: "Package",
-      moduleKey: "memberships",
-    };
-    if (membershipsIdx >= 0) navItems.splice(membershipsIdx + 1, 0, item);
-    else navItems.push(item);
-  }
+  const navItems = buildTenantSidebar(modules, ctx);
 
   const businessName = ctx.businessName;
 
-  const shellNavItems = navItems.map(({ title, href, icon, moduleKey }) => {
-    if (moduleKey === "accounting") {
-      return {
-        title,
-        href,
-        icon,
-        children: [
-          {
-            title: "Transaction History",
-            href: "/app/accounting/transactions",
-            icon: "Receipt",
-          },
-          {
-            title: "Cashbook Accounts",
-            href: "/app/accounting/cashbook",
-            icon: "Landmark",
-          },
-          {
-            title: "Accounting Report",
-            href: "/app/accounting/reports",
-            icon: "BookOpen",
-          },
-        ],
-      };
-    }
-    return { title, href, icon };
-  });
-
   return (
     <DashboardShell
-      navItems={shellNavItems}
+      navItems={navItems}
       brand={
         <div className="flex flex-col">
           <span className="text-sm font-semibold text-sidebar-primary">
