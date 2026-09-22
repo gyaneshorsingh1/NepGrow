@@ -1,0 +1,6 @@
+{"sessionId":"d5ea90","hypothesisId":"B","location":"session.ts:getSession","message":"getSession ok","data":{"authMs":761,"totalMs":761,"dbLookup":false,"isPlatformAdmin":false},"timestamp":1789386660449}
+{"sessionId":"d5ea90","hypothesisId":"B","location":"session.ts:getSession","message":"getSession ok","data":{"authMs":282,"totalMs":282,"dbLookup":false,"isPlatformAdmin":false},"timestamp":1789386660475}
+{"sessionId":"d5ea90","hypothesisId":"D","location":"middleware.ts:next","message":"middleware next","data":{"pathname":"/app/memberships","ms":0,"surface":"app"},"timestamp":1789386690837}
+{"sessionId":"d5ea90","hypothesisId":"B","location":"session.ts:getSession","message":"getSession ok","data":{"authMs":45,"totalMs":45,"dbLookup":false,"isPlatformAdmin":false},"timestamp":1789386693246}
+{"sessionId":"d5ea90","hypothesisId":"C","location":"context.ts:resolveTenantContext","message":"tenant context resolved","data":{"totalMs":38,"permissionCount":45,"moduleCount":10},"timestamp":1789386693262}
+{"sessionId":"d5ea90","hypothesisId":"C","location":"tenant/layout.tsx","message":"tenant layout timings","data":{"sessionAndCtxMs":63,"modulesMs":58,"totalMs":121,"moduleRows":10},"timestamp":1789386693321}

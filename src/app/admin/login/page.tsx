@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/auth/login-form";
 import {
@@ -6,12 +7,18 @@ import {
   CardContent,
   CardHeader,
 } from "@/components/ui/card";
+import { getPostLoginPath, getSession } from "@/lib/auth/session";
 
 export const metadata = {
   title: "Admin login",
 };
 
-export default function AdminLoginPage() {
+export default async function AdminLoginPage() {
+  const session = await getSession();
+  if (session) {
+    redirect(await getPostLoginPath("/admin"));
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.12),_transparent_55%)] px-4">
       <div className="w-full max-w-md space-y-4">

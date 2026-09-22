@@ -18,6 +18,8 @@ const STATUS_MAP: Record<string, { label: string; variant: StatusTone }> = {
   EXPIRED: { label: "Expired", variant: "muted" },
   REFUNDED: { label: "Refunded", variant: "secondary" },
   FAILED: { label: "Failed", variant: "destructive" },
+  INCOME: { label: "Income", variant: "success" },
+  EXPENSE: { label: "Expense", variant: "destructive" },
 };
 
 function humanizeStatus(status: string) {

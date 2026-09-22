@@ -3,21 +3,41 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 
+import { resolveIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 export interface SidebarNavItem {
   title: string;
   href: string;
-  icon?: LucideIcon;
+  /** Lucide icon name string — must be serializable from Server Components */
+  icon?: string;
   disabled?: boolean;
+  children?: SidebarNavItem[];
 }
 
 interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
   items: SidebarNavItem[];
   brand?: React.ReactNode;
   footer?: React.ReactNode;
+}
+
+function isPathActive(pathname: string, href: string) {
+  return (
+    pathname === href ||
+    (href !== "/" &&
+      href !== "/admin" &&
+      href !== "/app" &&
+      pathname.startsWith(`${href}/`)) ||
+    (href === "/admin" && pathname === "/admin") ||
+    (href === "/app" && pathname === "/app")
+  );
+}
+
+function itemOrChildActive(pathname: string, item: SidebarNavItem): boolean {
+  if (isPathActive(pathname, item.href)) return true;
+  return Boolean(item.children?.some((child) => isPathActive(pathname, child.href)));
 }
 
 function SidebarNav({
@@ -28,12 +48,39 @@ function SidebarNav({
   ...props
 }: SidebarNavProps) {
   const pathname = usePathname();
+  const [openKeys, setOpenKeys] = React.useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    for (const item of items) {
+      if (item.children?.length && itemOrChildActive(pathname, item)) {
+        initial[item.href] = true;
+      }
+    }
+    return initial;
+  });
+
+  React.useEffect(() => {
+    setOpenKeys((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const item of items) {
+        if (item.children?.length && itemOrChildActive(pathname, item) && !next[item.href]) {
+          next[item.href] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [pathname, items]);
+
+  function toggle(href: string) {
+    setOpenKeys((prev) => ({ ...prev, [href]: !prev[href] }));
+  }
 
   return (
     <aside
       className={cn(
         "flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
-        className
+        className,
       )}
       {...props}
     >
@@ -45,12 +92,25 @@ function SidebarNav({
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {items.map((item) => {
-          const Icon = item.icon;
-          const active =
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(`${item.href}/`));
+          const Icon = resolveIcon(item.icon);
+          const hasChildren = Boolean(item.children?.length);
+          const active = itemOrChildActive(pathname, item);
+          const expanded = Boolean(openKeys[item.href]);
+          const children = item.children ?? [];
+          let activeChildHref: string | null = null;
+          for (const child of children) {
+            if (isPathActive(pathname, child.href)) {
+              if (
+                !activeChildHref ||
+                child.href.length > activeChildHref.length
+              ) {
+                activeChildHref = child.href;
+              }
+            }
+          }
 
           return (
+<<<<<<< HEAD
 <<<<<<< Updated upstream
             <Link
               key={item.href}
@@ -68,6 +128,8 @@ function SidebarNav({
               <span>{item.title}</span>
             </Link>
 =======
+=======
+>>>>>>> ba29daae3a9f89933048278c073c16523f9d9696
             <div key={item.href} className="space-y-0.5">
               <div
                 className={cn(
@@ -81,6 +143,7 @@ function SidebarNav({
                 <Link
                   href={item.disabled ? "#" : item.href}
                   aria-disabled={item.disabled}
+<<<<<<< HEAD
                   aria-expanded={hasChildren ? expanded : undefined}
                   onClick={
                     hasChildren
@@ -90,6 +153,8 @@ function SidebarNav({
                         }
                       : undefined
                   }
+=======
+>>>>>>> ba29daae3a9f89933048278c073c16523f9d9696
                   className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2"
                 >
                   <Icon className="size-4 shrink-0" aria-hidden />
@@ -142,7 +207,10 @@ function SidebarNav({
                 </div>
               ) : null}
             </div>
+<<<<<<< HEAD
 >>>>>>> Stashed changes
+=======
+>>>>>>> ba29daae3a9f89933048278c073c16523f9d9696
           );
         })}
       </nav>

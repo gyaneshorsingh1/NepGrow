@@ -1,11 +1,22 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { businessWebsiteMetadata } from "@/features/websites/metadata";
 import { resolveBusinessWebsite } from "@/features/websites/resolve";
 import { AppError } from "@/lib/errors";
 import { formatMoney } from "@/lib/utils";
 import { SportsWebsiteLayout } from "@/templates/sports/layout";
 
 type Params = Promise<{ category: string; businessSlug: string }>;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { category, businessSlug } = await params;
+  return businessWebsiteMetadata(category, businessSlug, "Facilities");
+}
 
 export default async function PublicFacilitiesPage({
   params,
@@ -55,7 +66,9 @@ export default async function PublicFacilitiesPage({
                 {facility.courts.map((court) => (
                   <li key={court.id} className="flex justify-between gap-4">
                     <span>{court.name}</span>
-                    <span>{formatMoney(court.hourlyRateCents)} / hr</span>
+                    <span>
+                      {formatMoney(court.hourlyRateCents, business.currency)} / hr
+                    </span>
                   </li>
                 ))}
               </ul>

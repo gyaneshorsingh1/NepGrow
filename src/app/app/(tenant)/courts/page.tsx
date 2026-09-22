@@ -1,5 +1,8 @@
+import Link from "next/link";
+
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -10,9 +13,9 @@ import {
 } from "@/components/ui/table";
 import { authorize, requireModule, resolveTenantContext } from "@/lib/authorization/context";
 import { prisma } from "@/lib/db";
-import { formatMoney } from "@/lib/utils";
+import { formatTenantMoney } from "@/lib/utils";
 
-import { CreateCourtForm } from "./create-court-form";
+import { CourtRowActions } from "./court-row-actions";
 
 export const metadata = { title: "Courts" };
 
@@ -33,14 +36,32 @@ export default async function CourtsPage() {
     }),
   ]);
 
+  const canCreate = ctx.ability.can("create", "courts");
+  const canUpdate = ctx.ability.can("update", "courts");
+  const canDelete = ctx.ability.can("delete", "courts");
+  const activeFacilities = facilities.map((f) => ({ id: f.id, name: f.name }));
+  const editFacilities = [...activeFacilities];
+  for (const court of courts) {
+    if (!editFacilities.some((f) => f.id === court.facilityId)) {
+      editFacilities.push({
+        id: court.facility.id,
+        name: court.facility.name,
+      });
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Courts"
         description="Bookable courts within your facilities."
-      />
-      <CreateCourtForm
-        facilities={facilities.map((f) => ({ id: f.id, name: f.name }))}
+        actions={
+          canCreate ? (
+            <Button asChild>
+              <Link href="/app/courts/new">+ Add Court</Link>
+            </Button>
+          ) : null
+        }
       />
       <div className="rounded-xl border border-border bg-card">
         <Table>
@@ -51,6 +72,7 @@ export default async function CourtsPage() {
               <TableHead>Rate</TableHead>
               <TableHead>Capacity</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -58,10 +80,19 @@ export default async function CourtsPage() {
               <TableRow key={court.id}>
                 <TableCell className="font-medium">{court.name}</TableCell>
                 <TableCell>{court.facility.name}</TableCell>
-                <TableCell>{formatMoney(court.hourlyRateCents)}</TableCell>
+                <TableCell>{formatTenantMoney(court.hourlyRateCents, ctx)}</TableCell>
                 <TableCell>{court.capacity ?? "—"}</TableCell>
                 <TableCell>
                   <StatusBadge status={court.status} />
+                </TableCell>
+                <TableCell>
+                  <CourtRowActions
+                    court={court}
+                    facilities={editFacilities}
+                    canUpdate={canUpdate}
+                    canDelete={canDelete}
+                    currencyDecimals={ctx.currencyDecimals}
+                  />
                 </TableCell>
               </TableRow>
             ))}

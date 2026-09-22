@@ -7,6 +7,92 @@ import { hashPassword } from "better-auth/crypto";
 
 const prisma = new PrismaClient();
 
+async function ensureCredentialPassword(
+  userId: string,
+  password: string,
+) {
+  const hashed = await hashPassword(password);
+  const account = await prisma.account.findFirst({
+    where: { userId, providerId: "credential" },
+  });
+  // Better Auth requires credential accountId === user.id (not email)
+  if (account) {
+    await prisma.account.update({
+      where: { id: account.id },
+      data: { password: hashed, accountId: userId },
+    });
+  } else {
+    await prisma.account.create({
+      data: {
+        userId,
+        accountId: userId,
+        providerId: "credential",
+        password: hashed,
+      },
+    });
+  }
+}
+
+async function ensureReceptionistForBusiness(businessId: string) {
+  const receptionistTemplate = await prisma.role.findFirst({
+    where: { isTemplate: true, key: "receptionist", businessId: null },
+    include: { permissions: true },
+  });
+  if (!receptionistTemplate) return null;
+
+  let role = await prisma.role.findFirst({
+    where: { businessId, key: "receptionist" },
+  });
+  if (!role) {
+    role = await prisma.role.create({
+      data: {
+        businessId,
+        name: "Receptionist",
+        key: "receptionist",
+        isSystem: false,
+        description: receptionistTemplate.description,
+        permissions: {
+          create: receptionistTemplate.permissions.map((p) => ({
+            permissionId: p.permissionId,
+          })),
+        },
+      },
+    });
+  }
+
+  const email = "receptionist@abc-sports.local";
+  const seedPassword = "password";
+  let user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        name: "ABC Receptionist",
+        email,
+        emailVerified: true,
+      },
+    });
+  }
+  await ensureCredentialPassword(user.id, seedPassword);
+
+  const existingMembership = await prisma.businessMembership.findUnique({
+    where: {
+      userId_businessId: { userId: user.id, businessId },
+    },
+  });
+  if (!existingMembership) {
+    await prisma.businessMembership.create({
+      data: {
+        userId: user.id,
+        businessId,
+        status: "ACTIVE",
+        roles: { create: [{ roleId: role.id }] },
+      },
+    });
+  }
+
+  return { email, seedPassword };
+}
+
 async function main() {
   const category = await prisma.businessCategory.findUnique({
     where: { slug: "sports-center" },
@@ -28,32 +114,43 @@ async function main() {
     throw new Error("Run npm run db:seed first");
   }
 
-  const email = "owner@abc-sports.local";
+  const email = "owner@gmail.com";
+  const seedPassword = "password";
+  const legacyEmail = "owner@abc-sports.local";
+
+  let user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    const legacy = await prisma.user.findUnique({ where: { email: legacyEmail } });
+    if (legacy) {
+      user = await prisma.user.update({
+        where: { id: legacy.id },
+        data: { email },
+      });
+    } else {
+      user = await prisma.user.create({
+        data: {
+          name: "ABC Owner",
+          email,
+          emailVerified: true,
+        },
+      });
+    }
+  }
+  await ensureCredentialPassword(user.id, seedPassword);
+
   const existing = await prisma.business.findFirst({
     where: { slug: "abc-sports-center" },
   });
   if (existing) {
+    const receptionist = await ensureReceptionistForBusiness(existing.id);
     console.log("Demo business already exists:", existing.slug);
+    console.log(`Owner login: ${email} / ${seedPassword}`);
+    if (receptionist) {
+      console.log(
+        `Receptionist login: ${receptionist.email} / ${receptionist.seedPassword}`,
+      );
+    }
     return;
-  }
-
-  let user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    const password = await hashPassword("Owner123!");
-    user = await prisma.user.create({
-      data: {
-        name: "ABC Owner",
-        email,
-        emailVerified: true,
-        accounts: {
-          create: {
-            accountId: email,
-            providerId: "credential",
-            password,
-          },
-        },
-      },
-    });
   }
 
   const business = await prisma.business.create({
@@ -137,21 +234,28 @@ async function main() {
           {
             businessId: business.id,
             name: "Court 1",
-            hourlyRateCents: 150000,
+            hourlyRateCents: 1500,
           },
           {
             businessId: business.id,
             name: "Court 2",
-            hourlyRateCents: 150000,
+            hourlyRateCents: 1500,
           },
         ],
       },
     },
   });
 
+  const receptionist = await ensureReceptionistForBusiness(business.id);
+
   console.log("Demo client ready.");
   console.log("Business slug: abc-sports-center");
-  console.log("Owner login: owner@abc-sports.local / Owner123!");
+  console.log(`Owner login: ${email} / ${seedPassword}`);
+  if (receptionist) {
+    console.log(
+      `Receptionist login: ${receptionist.email} / ${receptionist.seedPassword}`,
+    );
+  }
   console.log("Public site: /sites/sports/abc-sports-center");
   console.log("Facility:", facility.name);
 }

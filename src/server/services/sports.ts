@@ -3,6 +3,11 @@ import { AppError } from "@/lib/errors";
 import { logActivity } from "@/server/services/activity";
 import type { TenantContext } from "@/lib/authorization/context";
 import { authorize, requireModule } from "@/lib/authorization/context";
+import { createPaymentGateway } from "@/server/services/payment-gateway";
+import {
+  postCashbookPayment,
+  reverseCashbookPayment,
+} from "@/server/services/accounting";
 
 export async function listCustomers(ctx: TenantContext) {
   await requireModule(ctx, "customers");
@@ -15,7 +20,13 @@ export async function listCustomers(ctx: TenantContext) {
 
 export async function createCustomer(
   ctx: TenantContext,
-  data: { name: string; email?: string; phone?: string; notes?: string },
+  data: {
+    name: string;
+    email?: string;
+    phone?: string;
+    notes?: string;
+    status?: "ACTIVE" | "INACTIVE";
+  },
 ) {
   await requireModule(ctx, "customers");
   await authorize(ctx, "create", "customers", "customers");
@@ -26,12 +37,75 @@ export async function createCustomer(
       email: data.email || null,
       phone: data.phone,
       notes: data.notes,
+      status: data.status ?? "ACTIVE",
     },
   });
   await logActivity({
     businessId: ctx.businessId,
     userId: ctx.userId,
     action: "customer.created",
+    module: "customers",
+    entity: "Customer",
+    entityId: customer.id,
+  });
+  return customer;
+}
+
+export async function updateCustomer(
+  ctx: TenantContext,
+  customerId: string,
+  data: {
+    name: string;
+    email?: string;
+    phone?: string;
+    notes?: string;
+    status?: "ACTIVE" | "INACTIVE";
+  },
+) {
+  await requireModule(ctx, "customers");
+  await authorize(ctx, "update", "customers", "customers");
+  const existing = await prisma.customer.findFirst({
+    where: { id: customerId, businessId: ctx.businessId },
+  });
+  if (!existing) throw new AppError("Customer not found", "NOT_FOUND", 404);
+
+  const customer = await prisma.customer.update({
+    where: { id: customerId },
+    data: {
+      name: data.name,
+      email: data.email || null,
+      phone: data.phone,
+      notes: data.notes,
+      ...(data.status ? { status: data.status } : {}),
+    },
+  });
+  await logActivity({
+    businessId: ctx.businessId,
+    userId: ctx.userId,
+    action: "customer.updated",
+    module: "customers",
+    entity: "Customer",
+    entityId: customer.id,
+  });
+  return customer;
+}
+
+export async function deleteCustomer(ctx: TenantContext, customerId: string) {
+  await requireModule(ctx, "customers");
+  await authorize(ctx, "delete", "customers", "customers");
+  const existing = await prisma.customer.findFirst({
+    where: { id: customerId, businessId: ctx.businessId },
+  });
+  if (!existing) throw new AppError("Customer not found", "NOT_FOUND", 404);
+
+  const customer = await prisma.customer.update({
+    where: { id: customerId },
+    data: { status: "INACTIVE" },
+  });
+  await logActivity({
+    businessId: ctx.businessId,
+    userId: ctx.userId,
+    action: "customer.deleted",
     module: "customers",
     entity: "Customer",
     entityId: customer.id,
@@ -51,13 +125,84 @@ export async function listFacilities(ctx: TenantContext) {
 
 export async function createFacility(
   ctx: TenantContext,
-  data: { name: string; sport: string; description?: string },
+  data: {
+    name: string;
+    sport: string;
+    description?: string;
+    status?: "ACTIVE" | "INACTIVE";
+  },
 ) {
   await requireModule(ctx, "facilities");
   await authorize(ctx, "create", "facilities", "facilities");
   return prisma.facility.create({
-    data: { businessId: ctx.businessId, ...data },
+    data: {
+      businessId: ctx.businessId,
+      name: data.name,
+      sport: data.sport,
+      description: data.description,
+      status: data.status ?? "ACTIVE",
+    },
   });
+}
+
+export async function updateFacility(
+  ctx: TenantContext,
+  facilityId: string,
+  data: {
+    name: string;
+    sport: string;
+    description?: string;
+    status?: "ACTIVE" | "INACTIVE";
+  },
+) {
+  await requireModule(ctx, "facilities");
+  await authorize(ctx, "update", "facilities", "facilities");
+  const existing = await prisma.facility.findFirst({
+    where: { id: facilityId, businessId: ctx.businessId },
+  });
+  if (!existing) throw new AppError("Facility not found", "NOT_FOUND", 404);
+
+  const facility = await prisma.facility.update({
+    where: { id: facilityId },
+    data: {
+      name: data.name,
+      sport: data.sport,
+      description: data.description,
+      ...(data.status ? { status: data.status } : {}),
+    },
+  });
+  await logActivity({
+    businessId: ctx.businessId,
+    userId: ctx.userId,
+    action: "facility.updated",
+    module: "facilities",
+    entity: "Facility",
+    entityId: facility.id,
+  });
+  return facility;
+}
+
+export async function deleteFacility(ctx: TenantContext, facilityId: string) {
+  await requireModule(ctx, "facilities");
+  await authorize(ctx, "delete", "facilities", "facilities");
+  const existing = await prisma.facility.findFirst({
+    where: { id: facilityId, businessId: ctx.businessId },
+  });
+  if (!existing) throw new AppError("Facility not found", "NOT_FOUND", 404);
+
+  const facility = await prisma.facility.update({
+    where: { id: facilityId },
+    data: { status: "INACTIVE" },
+  });
+  await logActivity({
+    businessId: ctx.businessId,
+    userId: ctx.userId,
+    action: "facility.deleted",
+    module: "facilities",
+    entity: "Facility",
+    entityId: facility.id,
+  });
+  return facility;
 }
 
 export async function createCourt(
@@ -67,6 +212,7 @@ export async function createCourt(
     name: string;
     capacity?: number;
     hourlyRateCents: number;
+    status?: "ACTIVE" | "INACTIVE";
   },
 ) {
   await requireModule(ctx, "courts");
@@ -82,8 +228,76 @@ export async function createCourt(
       name: data.name,
       capacity: data.capacity,
       hourlyRateCents: data.hourlyRateCents,
+      status: data.status ?? "ACTIVE",
     },
   });
+}
+
+export async function updateCourt(
+  ctx: TenantContext,
+  courtId: string,
+  data: {
+    facilityId: string;
+    name: string;
+    capacity?: number;
+    hourlyRateCents: number;
+    status?: "ACTIVE" | "INACTIVE";
+  },
+) {
+  await requireModule(ctx, "courts");
+  await authorize(ctx, "update", "courts", "courts");
+  const existing = await prisma.court.findFirst({
+    where: { id: courtId, businessId: ctx.businessId },
+  });
+  if (!existing) throw new AppError("Court not found", "NOT_FOUND", 404);
+
+  const facility = await prisma.facility.findFirst({
+    where: { id: data.facilityId, businessId: ctx.businessId },
+  });
+  if (!facility) throw new AppError("Facility not found", "NOT_FOUND", 404);
+
+  const court = await prisma.court.update({
+    where: { id: courtId },
+    data: {
+      facilityId: data.facilityId,
+      name: data.name,
+      capacity: data.capacity,
+      hourlyRateCents: data.hourlyRateCents,
+      ...(data.status ? { status: data.status } : {}),
+    },
+  });
+  await logActivity({
+    businessId: ctx.businessId,
+    userId: ctx.userId,
+    action: "court.updated",
+    module: "courts",
+    entity: "Court",
+    entityId: court.id,
+  });
+  return court;
+}
+
+export async function deleteCourt(ctx: TenantContext, courtId: string) {
+  await requireModule(ctx, "courts");
+  await authorize(ctx, "delete", "courts", "courts");
+  const existing = await prisma.court.findFirst({
+    where: { id: courtId, businessId: ctx.businessId },
+  });
+  if (!existing) throw new AppError("Court not found", "NOT_FOUND", 404);
+
+  const court = await prisma.court.update({
+    where: { id: courtId },
+    data: { status: "INACTIVE" },
+  });
+  await logActivity({
+    businessId: ctx.businessId,
+    userId: ctx.userId,
+    action: "court.deleted",
+    module: "courts",
+    entity: "Court",
+    entityId: court.id,
+  });
+  return court;
 }
 
 async function assertNoBookingConflict(
@@ -95,6 +309,8 @@ async function assertNoBookingConflict(
   if (endAt <= startAt) {
     throw new AppError("End time must be after start time", "VALIDATION", 400);
   }
+  // Overlap rule matches rangesOverlap() in booking-conflict.ts:
+  // existing.start < newEnd AND existing.end > newStart
   const conflict = await prisma.booking.findFirst({
     where: {
       courtId,
@@ -120,6 +336,7 @@ export async function createBooking(
     endAt: string;
     notes?: string;
     totalCents?: number;
+    status?: "PENDING" | "CONFIRMED";
   },
 ) {
   await requireModule(ctx, "bookings");
@@ -167,7 +384,7 @@ export async function createBooking(
         endAt,
         notes: data.notes,
         totalCents: data.totalCents ?? court.hourlyRateCents,
-        status: "CONFIRMED",
+        status: data.status ?? "CONFIRMED",
       },
     });
 
@@ -299,25 +516,55 @@ export async function createPayment(
     amountCents: number;
     customerId?: string;
     bookingId?: string;
+    membershipId?: string;
     method?: string;
     reference?: string;
     notes?: string;
+    cashbookAccountId?: string;
   },
 ) {
   await requireModule(ctx, "payments");
   await authorize(ctx, "create", "payments", "payments");
-  const payment = await prisma.payment.create({
-    data: {
-      businessId: ctx.businessId,
-      amountCents: data.amountCents,
-      customerId: data.customerId,
-      bookingId: data.bookingId,
-      method: data.method,
-      reference: data.reference,
-      notes: data.notes,
-      status: "COMPLETED",
-    },
+
+  if (data.membershipId) {
+    const membership = await prisma.membership.findFirst({
+      where: { id: data.membershipId, businessId: ctx.businessId },
+    });
+    if (!membership) {
+      throw new AppError("Membership not found", "NOT_FOUND", 404);
+    }
+  }
+
+  const payment = await prisma.$transaction(async (tx) => {
+    const created = await tx.payment.create({
+      data: {
+        businessId: ctx.businessId,
+        amountCents: data.amountCents,
+        currency: ctx.currency,
+        customerId: data.customerId,
+        bookingId: data.bookingId,
+        membershipId: data.membershipId,
+        method: data.method,
+        reference: data.reference,
+        notes: data.notes,
+        status: "COMPLETED",
+      },
+    });
+
+    if (data.cashbookAccountId) {
+      await postCashbookPayment(ctx, {
+        paymentId: created.id,
+        accountId: data.cashbookAccountId,
+        amountCents: created.amountCents,
+        category: "Payment",
+        description: `Payment ${created.reference ?? ""}`.trim() || "Payment",
+        tx,
+      });
+    }
+
+    return created;
   });
+
   await logActivity({
     businessId: ctx.businessId,
     userId: ctx.userId,
@@ -329,6 +576,54 @@ export async function createPayment(
   return payment;
 }
 
+export async function refundPayment(ctx: TenantContext, paymentId: string) {
+  await requireModule(ctx, "payments");
+  await authorize(ctx, "refund", "payments", "payments");
+
+  const existing = await prisma.payment.findFirst({
+    where: { id: paymentId, businessId: ctx.businessId },
+  });
+  if (!existing) throw new AppError("Payment not found", "NOT_FOUND", 404);
+  if (existing.status !== "COMPLETED") {
+    throw new AppError("Only completed payments can be refunded", "VALIDATION", 400);
+  }
+
+  const gateway = createPaymentGateway();
+  const gatewayResult = await gateway.refund({
+    paymentId: existing.id,
+    amountCents: existing.amountCents,
+    currency: existing.currency,
+    reference: existing.reference ?? undefined,
+  });
+
+  const payment = await prisma.$transaction(async (tx) => {
+    const updated = await tx.payment.update({
+      where: { id: paymentId },
+      data: { status: "REFUNDED" },
+    });
+
+    await reverseCashbookPayment(ctx, { paymentId, tx });
+
+    return updated;
+  });
+
+  await logActivity({
+    businessId: ctx.businessId,
+    userId: ctx.userId,
+    action: "payment.refunded",
+    module: "payments",
+    entity: "Payment",
+    entityId: payment.id,
+    metadata: {
+      gateway: gatewayResult.provider,
+      externalId: gatewayResult.externalId,
+      ...gatewayResult.metadata,
+    },
+  });
+
+  return payment;
+}
+
 export async function createMembershipProduct(
   ctx: TenantContext,
   data: {
@@ -336,19 +631,30 @@ export async function createMembershipProduct(
     description?: string;
     priceCents: number;
     durationDays: number;
+    benefits?: string[] | string;
+    status?: "ACTIVE" | "INACTIVE";
   },
 ) {
-  await requireModule(ctx, "memberships");
-  await authorize(ctx, "create", "memberships", "memberships");
-  return prisma.membershipProduct.create({
-    data: {
-      businessId: ctx.businessId,
-      name: data.name,
-      description: data.description,
-      priceCents: data.priceCents,
-      durationDays: data.durationDays,
-    },
-  });
+  const { createMembershipProduct: create } = await import(
+    "@/server/services/memberships"
+  );
+  return create(ctx, data);
+}
+
+export async function assignMembership(
+  ctx: TenantContext,
+  data: {
+    customerId: string;
+    productId: string;
+    startDate?: string;
+    paymentStatus?: "PENDING" | "COMPLETED";
+    paymentMethod?: string;
+  },
+) {
+  const { assignMembership: assign } = await import(
+    "@/server/services/memberships"
+  );
+  return assign(ctx, data);
 }
 
 export async function listStaff(ctx: TenantContext) {
@@ -362,7 +668,13 @@ export async function listStaff(ctx: TenantContext) {
 
 export async function createStaff(
   ctx: TenantContext,
-  data: { name: string; email?: string; phone?: string; title?: string },
+  data: {
+    name: string;
+    email?: string;
+    phone?: string;
+    title?: string;
+    status?: "ACTIVE" | "INACTIVE";
+  },
 ) {
   await requireModule(ctx, "staff");
   await authorize(ctx, "create", "staff", "staff");
@@ -373,6 +685,37 @@ export async function createStaff(
       email: data.email,
       phone: data.phone,
       title: data.title,
+      status: data.status ?? "ACTIVE",
+    },
+  });
+}
+
+export async function updateStaff(
+  ctx: TenantContext,
+  staffId: string,
+  data: {
+    name: string;
+    email?: string;
+    phone?: string;
+    title?: string;
+    status?: "ACTIVE" | "INACTIVE";
+  },
+) {
+  await requireModule(ctx, "staff");
+  await authorize(ctx, "update", "staff", "staff");
+  const existing = await prisma.staffProfile.findFirst({
+    where: { id: staffId, businessId: ctx.businessId },
+  });
+  if (!existing) throw new AppError("Staff not found", "NOT_FOUND", 404);
+
+  return prisma.staffProfile.update({
+    where: { id: staffId },
+    data: {
+      name: data.name,
+      email: data.email || null,
+      phone: data.phone || null,
+      title: data.title || null,
+      ...(data.status ? { status: data.status } : {}),
     },
   });
 }
@@ -399,4 +742,79 @@ export async function getSportsReport(ctx: TenantContext) {
     payments,
     revenueCents: revenue._sum.amountCents ?? 0,
   };
+}
+
+export async function listAvailabilityRules(ctx: TenantContext) {
+  await requireModule(ctx, "bookings");
+  await authorize(ctx, "view", "bookings", "bookings");
+  return prisma.availabilityRule.findMany({
+    where: { businessId: ctx.businessId },
+    include: { court: true },
+    orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+  });
+}
+
+export async function createAvailabilityRule(
+  ctx: TenantContext,
+  data: {
+    courtId?: string;
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+  },
+) {
+  await requireModule(ctx, "bookings");
+  await authorize(ctx, "create", "bookings", "bookings");
+  if (data.endTime <= data.startTime) {
+    throw new AppError("End time must be after start time", "VALIDATION", 400);
+  }
+  if (data.courtId) {
+    const court = await prisma.court.findFirst({
+      where: { id: data.courtId, businessId: ctx.businessId },
+    });
+    if (!court) throw new AppError("Court not found", "NOT_FOUND", 404);
+  }
+  return prisma.availabilityRule.create({
+    data: {
+      businessId: ctx.businessId,
+      courtId: data.courtId || null,
+      dayOfWeek: data.dayOfWeek,
+      startTime: data.startTime,
+      endTime: data.endTime,
+    },
+  });
+}
+
+export async function updateBookingStatus(
+  ctx: TenantContext,
+  bookingId: string,
+  status: "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED",
+) {
+  await requireModule(ctx, "bookings");
+  if (status === "CANCELLED") {
+    await authorize(ctx, "cancel", "bookings", "bookings");
+  } else {
+    await authorize(ctx, "update", "bookings", "bookings");
+  }
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, businessId: ctx.businessId },
+  });
+  if (!booking) throw new AppError("Booking not found", "NOT_FOUND", 404);
+
+  const updated = await prisma.booking.update({
+    where: { id: bookingId },
+    data: { status },
+  });
+
+  await logActivity({
+    businessId: ctx.businessId,
+    userId: ctx.userId,
+    action: `booking.${status.toLowerCase()}`,
+    module: "bookings",
+    entity: "Booking",
+    entityId: bookingId,
+  });
+
+  return updated;
 }

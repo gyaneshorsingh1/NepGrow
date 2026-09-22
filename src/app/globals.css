@@ -43,6 +43,7 @@
 }
 
 :root {
+  color-scheme: light;
   --radius: 0.625rem;
   --background: oklch(0.985 0.002 247);
   --foreground: oklch(0.18 0.02 250);
@@ -78,6 +79,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.16 0.02 250);
   --foreground: oklch(0.95 0.01 250);
   --card: oklch(0.2 0.02 250);
@@ -112,5 +114,15 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+  }
+
+  select {
+    color-scheme: inherit;
+  }
+
+  select option,
+  select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
   }
 }

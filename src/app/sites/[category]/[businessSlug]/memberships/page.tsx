@@ -1,11 +1,22 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { businessWebsiteMetadata } from "@/features/websites/metadata";
 import { resolveBusinessWebsite } from "@/features/websites/resolve";
 import { AppError } from "@/lib/errors";
 import { formatMoney } from "@/lib/utils";
 import { SportsWebsiteLayout } from "@/templates/sports/layout";
 
 type Params = Promise<{ category: string; businessSlug: string }>;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { category, businessSlug } = await params;
+  return businessWebsiteMetadata(category, businessSlug, "Memberships");
+}
 
 export default async function PublicMembershipsPage({
   params,
@@ -49,7 +60,7 @@ export default async function PublicMembershipsPage({
                   {product.name}
                 </h2>
                 <p className="mt-2 text-2xl font-semibold text-white">
-                  {formatMoney(product.priceCents)}
+                  {formatMoney(product.priceCents, business.currency)}
                 </p>
                 <p className="mt-1 text-sm text-emerald-50/60">
                   {product.durationDays} days
