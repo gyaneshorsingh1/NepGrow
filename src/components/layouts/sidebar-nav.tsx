@@ -51,6 +51,7 @@ function SidebarNav({
             (item.href !== "/" && pathname.startsWith(`${item.href}/`));
 
           return (
+<<<<<<< Updated upstream
             <Link
               key={item.href}
               href={item.disabled ? "#" : item.href}
@@ -66,6 +67,82 @@ function SidebarNav({
               {Icon ? <Icon className="size-4 shrink-0" aria-hidden /> : null}
               <span>{item.title}</span>
             </Link>
+=======
+            <div key={item.href} className="space-y-0.5">
+              <div
+                className={cn(
+                  "flex items-center rounded-md text-sm font-medium transition-colors",
+                  active
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                  item.disabled && "pointer-events-none opacity-50",
+                )}
+              >
+                <Link
+                  href={item.disabled ? "#" : item.href}
+                  aria-disabled={item.disabled}
+                  aria-expanded={hasChildren ? expanded : undefined}
+                  onClick={
+                    hasChildren
+                      ? (e) => {
+                          e.preventDefault();
+                          toggle(item.href);
+                        }
+                      : undefined
+                  }
+                  className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2"
+                >
+                  <Icon className="size-4 shrink-0" aria-hidden />
+                  <span className="truncate">{item.title}</span>
+                </Link>
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    aria-label={expanded ? `Collapse ${item.title}` : `Expand ${item.title}`}
+                    aria-expanded={expanded}
+                    className="mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-sidebar-accent"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggle(item.href);
+                    }}
+                  >
+                    {expanded ? (
+                      <Minus className="size-3.5" aria-hidden />
+                    ) : (
+                      <Plus className="size-3.5" aria-hidden />
+                    )}
+                  </button>
+                ) : null}
+              </div>
+
+              {hasChildren && expanded ? (
+                <div className="ml-4 space-y-0.5 border-l border-sidebar-border pl-2">
+                  {children.map((child) => {
+                    const ChildIcon = resolveIcon(child.icon);
+                    const childActive = child.href === activeChildHref;
+                    return (
+                      <Link
+                        key={child.href}
+                        href={child.disabled ? "#" : child.href}
+                        aria-disabled={child.disabled}
+                        className={cn(
+                          "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors",
+                          childActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                            : "text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                          child.disabled && "pointer-events-none opacity-50",
+                        )}
+                      >
+                        <ChildIcon className="size-3.5 shrink-0" aria-hidden />
+                        <span className="truncate">{child.title}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+>>>>>>> Stashed changes
           );
         })}
       </nav>
