@@ -493,7 +493,7 @@ export async function listBookings(ctx: TenantContext) {
   await authorize(ctx, "view", "bookings", "bookings");
   return prisma.booking.findMany({
     where: { businessId: ctx.businessId },
-    include: { court: { include: { facility: true } }, customer: true },
+    include: { court: { include: { facility: true } }, customer: true, staffProfile: true },
     orderBy: { startAt: "desc" },
     take: 100,
   });

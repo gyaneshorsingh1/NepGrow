@@ -410,6 +410,47 @@ export async function updateClientModules(
   });
 }
 
+export async function setClientPermissions(
+  input: { businessId: string; roleId: string; permissionIds: string[] },
+  actorUserId: string,
+) {
+  const role = await prisma.role.findFirst({
+    where: { id: input.roleId, businessId: input.businessId, key: "owner" },
+  });
+  if (!role) {
+    throw new AppError("Owner role not found for this client", "NOT_FOUND", 404);
+  }
+
+  const permissionIds = await prisma.permission.findMany({
+    where: { id: { in: input.permissionIds } },
+    select: { id: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
+    if (permissionIds.length) {
+      await tx.rolePermission.createMany({
+        data: permissionIds.map((p) => ({
+          roleId: role.id,
+          permissionId: p.id,
+        })),
+      });
+    }
+  });
+
+  await logActivity({
+    businessId: input.businessId,
+    userId: actorUserId,
+    action: "client.permissions.updated",
+    module: "permissions",
+    entity: "Role",
+    entityId: role.id,
+    metadata: { permissionIds: input.permissionIds },
+  });
+
+  return role;
+}
+
 export async function createTenantUser(
   input: {
     businessId: string;

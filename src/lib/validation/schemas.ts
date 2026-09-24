@@ -56,6 +56,12 @@ export const updateClientModulesSchema = z.object({
   moduleIds: z.array(z.string()).default([]),
 });
 
+export const setClientPermissionsSchema = z.object({
+  businessId: z.string().min(1),
+  roleId: z.string().min(1),
+  permissionIds: z.array(z.string()).default([]),
+});
+
 export const createTenantUserSchema = z.object({
   businessId: z.string().min(1),
   name: z.string().min(2).max(80),

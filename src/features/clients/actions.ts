@@ -9,6 +9,7 @@ import {
   changeClientPlanSchema,
   createClientSchema,
   createTenantUserSchema,
+  setClientPermissionsSchema,
   setTenantUserStatusSchema,
   updateClientModulesSchema,
   updateClientProfileSchema,
@@ -18,6 +19,7 @@ import {
   changeClientPlan,
   createClient,
   createTenantUser,
+  setClientPermissions,
   setClientStatus,
   setTenantUserStatus,
   updateClientModules,
@@ -99,6 +101,20 @@ export async function updateClientModulesAction(
     await updateClientModules(input.businessId, input.moduleIds, session.user.id);
     revalidateClient(input.businessId);
     return { ok: true, data: { count: input.moduleIds.length } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function setClientPermissionsAction(
+  raw: unknown,
+): Promise<ActionResult<{ count: number }>> {
+  try {
+    const session = await requirePlatformAdmin();
+    const input = setClientPermissionsSchema.parse(raw);
+    await setClientPermissions(input, session.user.id);
+    revalidateClient(input.businessId);
+    return { ok: true, data: { count: input.permissionIds.length } };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }

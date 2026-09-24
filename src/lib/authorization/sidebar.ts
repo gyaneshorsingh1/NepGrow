@@ -69,6 +69,23 @@ const MODULE_CHILDREN: Record<string, ChildSpec[]> = {
   bookings: [
     { title: "All Bookings", href: "/app/bookings", icon: "Calendar" },
     { title: "Availability", href: "/app/availability", icon: "Clock" },
+    { title: "Trainer Schedule", href: "/app/bookings/trainers", icon: "UserCheck" },
+  ],
+  attendance: [
+    { title: "Today's Attendance", href: "/app/attendance", icon: "UserCheck" },
+    { title: "Attendance History", href: "/app/attendance/history", icon: "History" },
+  ],
+  crm: [
+    { title: "Leads Pipeline", href: "/app/crm", icon: "Megaphone" },
+    { title: "Follow-ups", href: "/app/crm/follow-ups", icon: "PhoneCall" },
+  ],
+  sales: [
+    { title: "Point of Sale", href: "/app/sales/pos", icon: "ShoppingCart" },
+    { title: "Inventory", href: "/app/sales/inventory", icon: "PackageSearch" },
+  ],
+  communications: [
+    { title: "Automations", href: "/app/communications/automations", icon: "Zap" },
+    { title: "Templates", href: "/app/communications/templates", icon: "MailTemplate" },
   ],
   memberships: [
     {
@@ -77,11 +94,13 @@ const MODULE_CHILDREN: Record<string, ChildSpec[]> = {
       icon: "BadgeCheck",
     },
     { title: "Plans", href: "/app/membership-plans", icon: "Package" },
+    { title: "Custom Programs", href: "/app/memberships/programs", icon: "Activity" },
   ],
   settings: [
     { title: "General", href: "/app/settings", icon: "Settings" },
     { title: "Business Profile", href: "/app/business", icon: "Building2" },
     { title: "Website Content", href: "/app/settings/website", icon: "Globe" },
+    { title: "Documents & Waivers", href: "/app/settings/documents", icon: "FileText" },
   ],
   staff: [
     {

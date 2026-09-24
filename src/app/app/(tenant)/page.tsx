@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { format } from "date-fns";
 
 import {
   Card,
@@ -12,8 +13,9 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { resolveTenantContext } from "@/lib/authorization/context";
 import { prisma } from "@/lib/db";
 import { formatTenantMoney } from "@/lib/utils";
-
 import { DashboardCharts } from "./dashboard-charts";
+import { getDashboardStats } from "@/features/dashboard/actions";
+import { AlertTriangle, Info, BellRing } from "lucide-react";
 
 export const metadata = { title: "Dashboard" };
 
@@ -36,32 +38,22 @@ export default async function TenantDashboardPage() {
   since.setDate(since.getDate() - 13);
 
   const [
-    customers,
+    dashboardStats,
+    customersCount,
     openBookings,
-    facilities,
-    courts,
-    activeMemberships,
-    pendingPayments,
     paymentsAgg,
     recentPayments,
     bookingGroups,
     revenuePayments,
     recentBookings,
   ] = await Promise.all([
+    getDashboardStats(businessId),
     prisma.customer.count({ where: { businessId } }),
     prisma.booking.count({
       where: {
         businessId,
         status: { in: ["PENDING", "CONFIRMED"] },
       },
-    }),
-    prisma.facility.count({ where: { businessId } }),
-    prisma.court.count({ where: { businessId, status: "ACTIVE" } }),
-    prisma.membership.count({
-      where: { businessId, status: "ACTIVE" },
-    }),
-    prisma.payment.count({
-      where: { businessId, status: "PENDING" },
     }),
     prisma.payment.aggregate({
       where: { businessId, status: "COMPLETED" },
@@ -117,50 +109,27 @@ export default async function TenantDashboardPage() {
   }));
 
   const overview = [
-    { name: "Customers", value: customers },
+    { name: "Customers", value: customersCount },
     { name: "Bookings", value: openBookings },
-    { name: "Members", value: activeMemberships },
+    { name: "Members", value: dashboardStats.activeMembers },
     { name: "Payments", value: paymentsAgg._count },
   ];
 
-  const stats: Array<{ label: string; value: string; href?: string }> = [
-    {
-      label: "Customers",
-      value: String(customers),
-      href: enabled.has("customers") ? "/app/customers" : undefined,
-    },
-    {
-      label: "Open bookings",
-      value: String(openBookings),
-      href: enabled.has("bookings") ? "/app/bookings" : undefined,
-    },
-    {
-      label: "Active members",
-      value: String(activeMemberships),
-      href: enabled.has("memberships") ? "/app/memberships" : undefined,
-    },
-    {
-      label: "Pending payments",
-      value: String(pendingPayments),
-      href: enabled.has("payments") ? "/app/payments" : undefined,
-    },
-    {
-      label: "Facilities / courts",
-      value: `${facilities} / ${courts}`,
-      href: enabled.has("facilities") ? "/app/facilities" : undefined,
-    },
-    {
-      label: "Revenue collected",
-      value: formatTenantMoney(paymentsAgg._sum.amountCents ?? 0, ctx),
-      href: enabled.has("payments") ? "/app/payments" : undefined,
-    },
+  const primaryStats = [
+    { label: "ACTIVE MEMBERS", value: dashboardStats.activeMembers, href: "/app/memberships" },
+    { label: "CHECK-INS TODAY", value: dashboardStats.checkInsToday, href: "/app/attendance" },
+    { label: "CURRENTLY INSIDE", value: dashboardStats.currentlyInside, href: "/app/attendance" },
+    { label: "EXPIRING THIS WEEK", value: dashboardStats.expiringThisWeek, href: "/app/memberships" },
+    { label: "OVERDUE PAYMENTS", value: dashboardStats.overduePayments, href: "/app/payments" },
+    { label: "NEW LEADS", value: dashboardStats.newLeads, href: "/app/crm" },
+    { label: "REVENUE THIS MONTH", value: formatTenantMoney(dashboardStats.revenueThisMonthCents, ctx), href: "/app/accounting" },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       <PageHeader
-        title="Dashboard"
-        description={`Overview for ${ctx.businessName ?? "your business"}.`}
+        title="Good Morning 👋"
+        description={`Here's what's happening at ${ctx.businessName ?? "your business"} today.`}
         actions={
           enabled.has("reports") ? (
             <Button asChild variant="outline" size="sm">
@@ -170,34 +139,72 @@ export default async function TenantDashboardPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.href ? (
-                  <Link href={stat.href} className="hover:underline">
-                    {stat.label}
-                  </Link>
-                ) : (
-                  stat.label
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-semibold tracking-tight">
-                {stat.value}
-              </p>
-            </CardContent>
-          </Card>
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
+        {primaryStats.map((stat) => (
+          <Link href={stat.href} key={stat.label} className="block transition-transform hover:scale-105 hover:-translate-y-1">
+            <Card className="h-full bg-gradient-to-br from-card to-card/50 shadow-sm hover:shadow-md transition-shadow">
+              <CardContent className="p-4 flex flex-col items-center justify-center text-center h-full space-y-1">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{stat.label}</span>
+                <span className="text-xl md:text-2xl font-black text-foreground">{stat.value}</span>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
-      <DashboardCharts
-        revenueByDay={revenueSeries}
-        bookingsByStatus={bookingsByStatus}
-        overview={overview}
-      />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <DashboardCharts
+            revenueByDay={revenueSeries}
+            bookingsByStatus={bookingsByStatus}
+            overview={overview}
+          />
+        </div>
+        
+        <div className="space-y-6">
+          <Card className="border-orange-200 shadow-sm bg-orange-50/30">
+            <CardHeader className="pb-3 border-b border-orange-100 bg-orange-50/50">
+              <CardTitle className="text-base flex items-center gap-2 text-orange-900">
+                <BellRing className="w-4 h-4 text-orange-600" />
+                Attention Required
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              {dashboardStats.alerts.overduePayments.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase text-orange-800 tracking-wider flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> Overdue Payments
+                  </h4>
+                  {dashboardStats.alerts.overduePayments.map(p => (
+                    <div key={p.id} className="text-sm flex justify-between bg-white p-2 rounded-md border border-orange-100 shadow-sm">
+                      <span className="font-medium text-slate-700">{p.customer?.name}</span>
+                      <span className="text-orange-600 font-medium">{formatTenantMoney(p.amountCents, ctx)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {dashboardStats.alerts.expiringMemberships.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider flex items-center gap-1">
+                    <Info className="w-3 h-3" /> Expiring Memberships
+                  </h4>
+                  {dashboardStats.alerts.expiringMemberships.map(m => (
+                    <div key={m.id} className="text-sm flex justify-between bg-white p-2 rounded-md border border-slate-100 shadow-sm">
+                      <span className="font-medium text-slate-700">{m.customer.name}</span>
+                      <span className="text-slate-500">{format(m.endDate, "MMM d")}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {dashboardStats.alerts.overduePayments.length === 0 && dashboardStats.alerts.expiringMemberships.length === 0 && (
+                <p className="text-sm text-slate-500 text-center py-4">You&apos;re all caught up!</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -262,7 +269,7 @@ export default async function TenantDashboardPage() {
                 >
                   <div>
                     <p className="font-medium">
-                      {b.customer?.name ?? "Guest"} · {b.court.name}
+                      {b.customer?.name ?? "Guest"} · {b.court?.name ?? "PT Session"}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {b.startAt.toISOString().slice(0, 16).replace("T", " ")}

@@ -110,26 +110,6 @@ function SidebarNav({
           }
 
           return (
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-            <Link
-              key={item.href}
-              href={item.disabled ? "#" : item.href}
-              aria-disabled={item.disabled}
-              className={cn(
-                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
-                item.disabled && "pointer-events-none opacity-50"
-              )}
-            >
-              {Icon ? <Icon className="size-4 shrink-0" aria-hidden /> : null}
-              <span>{item.title}</span>
-            </Link>
-=======
-=======
->>>>>>> ba29daae3a9f89933048278c073c16523f9d9696
             <div key={item.href} className="space-y-0.5">
               <div
                 className={cn(
@@ -143,7 +123,6 @@ function SidebarNav({
                 <Link
                   href={item.disabled ? "#" : item.href}
                   aria-disabled={item.disabled}
-<<<<<<< HEAD
                   aria-expanded={hasChildren ? expanded : undefined}
                   onClick={
                     hasChildren
@@ -153,8 +132,6 @@ function SidebarNav({
                         }
                       : undefined
                   }
-=======
->>>>>>> ba29daae3a9f89933048278c073c16523f9d9696
                   className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2"
                 >
                   <Icon className="size-4 shrink-0" aria-hidden />
@@ -207,10 +184,6 @@ function SidebarNav({
                 </div>
               ) : null}
             </div>
-<<<<<<< HEAD
->>>>>>> Stashed changes
-=======
->>>>>>> ba29daae3a9f89933048278c073c16523f9d9696
           );
         })}
       </nav>

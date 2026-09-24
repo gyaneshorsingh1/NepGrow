@@ -160,6 +160,16 @@ model Business {
   availabilityRules AvailabilityRule[]
   cashbookAccounts CashbookAccount[]
   accountingTransactions AccountingTransaction[]
+  checkIns        CheckIn[]
+  leads           Lead[]
+  products        Product[]
+  posOrders       PosOrder[]
+  notificationTemplates NotificationTemplate[]
+  automationRules AutomationRule[]
+  notificationLogs NotificationLog[]
+  documentTemplates DocumentTemplate[]
+  customerDocuments CustomerDocument[]
+  customPrograms  CustomProgram[]
 
   @@unique([categoryId, slug])
   @@index([status])
@@ -505,6 +515,11 @@ model Customer {
   bookings    Booking[]
   memberships Membership[]
   payments    Payment[]
+  checkIns    CheckIn[]
+  posOrders   PosOrder[]
+  documents   CustomerDocument[]
+  customPrograms CustomProgram[]
+  progressMetrics ProgressMetric[]
 
   @@index([businessId])
   @@index([businessId, email])
@@ -523,6 +538,7 @@ model Facility {
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   courts   Court[]
+  checkIns CheckIn[]
 
   @@index([businessId])
   @@map("facilities")
@@ -568,7 +584,8 @@ model AvailabilityRule {
 model Booking {
   id          String        @id @default(cuid())
   businessId  String
-  courtId     String
+  courtId     String?       // Made optional since a booking could be just for a PT
+  staffProfileId String?    // For Personal Training bookings
   customerId  String?
   startAt     DateTime
   endAt       DateTime
@@ -579,12 +596,14 @@ model Booking {
   updatedAt   DateTime      @updatedAt
 
   business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  court    Court     @relation(fields: [courtId], references: [id])
+  court    Court?    @relation(fields: [courtId], references: [id])
+  staffProfile StaffProfile? @relation(fields: [staffProfileId], references: [id], onDelete: SetNull)
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   payments Payment[]
 
   @@index([businessId, startAt])
   @@index([courtId, startAt, endAt])
+  @@index([staffProfileId, startAt, endAt])
   @@index([status])
   @@map("bookings")
 }
@@ -690,6 +709,7 @@ model StaffProfile {
   updatedAt  DateTime @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  bookings Booking[]
 
   @@index([businessId])
   @@map("staff_profiles")
@@ -749,4 +769,296 @@ model AccountingTransaction {
   @@index([businessId, occurredAt])
   @@index([accountId, occurredAt])
   @@map("accounting_transactions")
+}
+
+// ─── Attendance ──────────────────────────────────────────────
+
+model CheckIn {
+  id         String    @id @default(cuid())
+  businessId String
+  customerId String
+  facilityId String?
+  checkInAt  DateTime  @default(now())
+  checkOutAt DateTime?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  facility Facility? @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, checkInAt])
+  @@index([customerId])
+  @@map("check_ins")
+}
+
+// ─── CRM & Leads ─────────────────────────────────────────────
+
+model Lead {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  email      String?
+  phone      String?
+  source     String?
+  status     LeadStatus @default(NEW)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  followUps LeadFollowUp[]
+
+  @@index([businessId, status])
+  @@map("leads")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  TRIAL
+  CONVERTED
+  LOST
+}
+
+model LeadFollowUp {
+  id          String   @id @default(cuid())
+  leadId      String
+  notes       String
+  scheduledAt DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("lead_follow_ups")
+}
+
+// ─── POS & Inventory ──────────────────────────────────────────
+
+model Product {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  description String?
+  priceCents  Float    @default(0)
+  sku         String?
+  stockLevel  Int      @default(0)
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderItems PosOrderItem[]
+
+  @@index([businessId, status])
+  @@map("products")
+}
+
+model PosOrder {
+  id          String   @id @default(cuid())
+  businessId  String
+  customerId  String?
+  totalCents  Float    @default(0)
+  status      PosOrderStatus @default(COMPLETED)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items    PosOrderItem[]
+
+  @@index([businessId, createdAt])
+  @@map("pos_orders")
+}
+
+enum PosOrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+model PosOrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  productId  String
+  quantity   Int      @default(1)
+  priceCents Float    @default(0)
+  createdAt  DateTime @default(now())
+
+  order   PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("pos_order_items")
+}
+
+// ─── Notifications & Automations ──────────────────────────────
+
+model NotificationTemplate {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  type        NotificationType @default(EMAIL)
+  subject     String?
+  body        String
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  automationRules AutomationRule[]
+
+  @@index([businessId])
+  @@map("notification_templates")
+}
+
+enum NotificationType {
+  EMAIL
+  SMS
+  PUSH
+}
+
+model AutomationRule {
+  id           String   @id @default(cuid())
+  businessId   String
+  name         String
+  triggerEvent String   // e.g., "MEMBERSHIP_EXPIRING", "NEW_LEAD"
+  conditions   Json?    // e.g., { "daysBefore": 3 }
+  offsetDays   Int      @default(0)
+  templateId   String
+  isActive     Boolean  @default(true)
+  status       EntityStatus @default(ACTIVE)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  template NotificationTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([businessId, triggerEvent])
+  @@map("automation_rules")
+}
+
+model NotificationLog {
+  id          String   @id @default(cuid())
+  businessId  String
+  customerId  String?
+  type        NotificationType
+  recipient   String   // email address or phone number
+  subject     String?
+  body        String
+  status      NotificationLogStatus @default(SENT)
+  errorMessage String?
+  sentAt      DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, sentAt])
+  @@map("notification_logs")
+}
+
+enum NotificationLogStatus {
+  SENT
+  FAILED
+  PENDING
+}
+
+// ─── Waivers & Documents (Phase 3) ───────────────────────────
+
+model DocumentTemplate {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String   // e.g. "Liability Waiver"
+  content     String   // HTML or rich text
+  isRequired  Boolean  @default(false)
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerDocuments CustomerDocument[]
+
+  @@index([businessId])
+  @@map("document_templates")
+}
+
+model CustomerDocument {
+  id           String   @id @default(cuid())
+  businessId   String
+  customerId   String
+  templateId   String
+  signedAt     DateTime?
+  ipAddress    String?
+  signatureData String? // Base64 signature image or textual signature
+  status       DocumentStatus @default(PENDING)
+  createdAt    DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  template DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_documents")
+}
+
+enum DocumentStatus {
+  PENDING
+  SIGNED
+  EXPIRED
+}
+
+// ─── Progress Tracking & Programs (Phase 3) ──────────────────
+
+model CustomProgram {
+  id          String   @id @default(cuid())
+  businessId  String
+  customerId  String
+  name        String   // e.g. "12-Week Transformation"
+  description String?
+  content     Json     // e.g. { weeks: [ { days: [...] } ] }
+  startDate   DateTime?
+  endDate     DateTime?
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("custom_programs")
+}
+
+model ProgressMetric {
+  id          String   @id @default(cuid())
+  customerId  String
+  metricName  String   // e.g. "Weight", "Body Fat", "Bench Press"
+  value       Float
+  unit        String   // e.g. "kg", "%", "lbs"
+  recordedAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, metricName])
+  @@map("progress_metrics")
+}
+
+// ─── Access Control (Phase 3) ────────────────────────────────
+
+model AccessLog {
+  id          String   @id @default(cuid())
+  businessId  String
+  customerId  String?
+  facilityId  String?
+  granted     Boolean
+  reason      String?  // e.g. "Membership Expired"
+  accessedAt  DateTime @default(now())
+
+  @@index([businessId, accessedAt])
+  @@map("access_logs")
 }

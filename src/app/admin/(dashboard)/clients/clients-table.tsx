@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Eye } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/shared/data-table";
@@ -47,6 +48,20 @@ const columns: ColumnDef<ClientRow>[] = [
   {
     accessorKey: "usersCount",
     header: "Users",
+  },
+  {
+    id: "actions",
+    header: () => <div className="text-right">Actions</div>,
+    cell: ({ row }) => (
+      <div className="flex justify-end gap-1">
+        <Button asChild variant="ghost" size="icon" title="View">
+          <Link href={`/admin/clients/${row.original.id}`}>
+            <Eye aria-hidden />
+            <span className="sr-only">View</span>
+          </Link>
+        </Button>
+      </div>
+    ),
   },
 ];
 

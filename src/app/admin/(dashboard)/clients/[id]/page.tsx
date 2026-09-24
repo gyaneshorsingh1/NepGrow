@@ -19,6 +19,7 @@ import { EditClientForm } from "./edit-client-form";
 import { ClientEntitlementsForm } from "./client-entitlements-form";
 import { ClientUsersPanel } from "./client-users-panel";
 import { ClientDetailTabs } from "./client-detail-tabs";
+import { ClientPermissionsForm } from "./client-permissions-form";
 
 export const metadata = { title: "Client detail" };
 
@@ -56,28 +57,44 @@ export default async function ClientDetailPage({
 
   if (!business) notFound();
 
-  const [plans, catalogModules] = await Promise.all([
-    prisma.plan.findMany({
-      where: {
-        OR: [{ categoryId: business.categoryId }, { categoryId: null }],
-        status: "ACTIVE",
-      },
-      orderBy: { sortOrder: "asc" },
-    }),
-    prisma.module.findMany({
-      where: {
-        OR: [
-          { isCore: true },
-          { categoryId: business.categoryId },
-          { categoryId: null },
-        ],
-      },
-      orderBy: { sortOrder: "asc" },
-    }),
-  ]);
+  const [plans, catalogModules, allPermissions, ownerRole, permissionModules] =
+    await Promise.all([
+      prisma.plan.findMany({
+        where: {
+          OR: [{ categoryId: business.categoryId }, { categoryId: null }],
+          status: "ACTIVE",
+        },
+        orderBy: { sortOrder: "asc" },
+      }),
+      prisma.module.findMany({
+        where: {
+          OR: [
+            { isCore: true },
+            { categoryId: business.categoryId },
+            { categoryId: null },
+          ],
+        },
+        orderBy: { sortOrder: "asc" },
+      }),
+      prisma.permission.findMany({
+        orderBy: [{ moduleKey: "asc" }, { key: "asc" }],
+      }),
+      prisma.role.findFirst({
+        where: { businessId: business.id, key: "owner" },
+        include: { permissions: true },
+      }),
+      prisma.module.findMany({
+        select: { key: true, name: true },
+      }),
+    ]);
 
   const enabledMap = new Map(
     business.businessModules.map((bm) => [bm.moduleId, bm.enabled]),
+  );
+
+  const moduleNameMap = new Map(permissionModules.map((m) => [m.key, m.name]));
+  const grantedPermissionIds = new Set(
+    ownerRole?.permissions.map((rp) => rp.permissionId) ?? [],
   );
 
   const sitePath = `/sites/${business.category.domainSlug}/${business.slug}`;
@@ -186,6 +203,34 @@ export default async function ClientDetailPage({
                   enabled: enabledMap.get(m.id) ?? false,
                 }))}
               />
+            </CardContent>
+          </Card>
+        }
+        permissions={
+          <Card>
+            <CardHeader>
+              <CardTitle>Allowed permissions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {ownerRole ? (
+                <ClientPermissionsForm
+                  businessId={business.id}
+                  roleId={ownerRole.id}
+                  permissions={allPermissions.map((p) => ({
+                    id: p.id,
+                    key: p.key,
+                    name: p.name,
+                    moduleKey: p.moduleKey,
+                    moduleName:
+                      moduleNameMap.get(p.moduleKey) ?? p.moduleKey,
+                    granted: grantedPermissionIds.has(p.id),
+                  }))}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No owner role found for this client.
+                </p>
+              )}
             </CardContent>
           </Card>
         }

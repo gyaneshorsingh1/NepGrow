@@ -52,7 +52,11 @@ export default async function CustomersPage() {
           <TableBody>
             {customers.map((c) => (
               <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link href={`/app/customers/${c.id}`} className="hover:underline text-primary">
+                    {c.name}
+                  </Link>
+                </TableCell>
                 <TableCell>{c.email ?? "—"}</TableCell>
                 <TableCell>{c.phone ?? "—"}</TableCell>
                 <TableCell>

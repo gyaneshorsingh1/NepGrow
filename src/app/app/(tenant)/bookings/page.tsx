@@ -66,7 +66,7 @@ export default async function BookingsPage() {
                   {b.startAt.toLocaleString()} → {b.endAt.toLocaleTimeString()}
                 </TableCell>
                 <TableCell>
-                  {b.court.facility.name} · {b.court.name}
+                  {b.court ? `${b.court.facility.name} · ${b.court.name}` : `PT Session w/ ${b.staffProfile?.name ?? "Trainer"}`}
                 </TableCell>
                 <TableCell>{b.customer?.name ?? "Walk-in"}</TableCell>
                 <TableCell>{formatTenantMoney(b.totalCents, ctx)}</TableCell>
