@@ -523,6 +523,11 @@ export const createAndSetBusinessCurrencySchema = z.object({
 
 export const updateBusinessProfileSchema = z.object({
   name: z.string().min(2).max(120),
+  slug: z
+    .string()
+    .min(2)
+    .max(80)
+    .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
   email: z.string().email(),
   phone: z.string().max(40).optional().or(z.literal("")),
   address: z.string().max(300).optional().or(z.literal("")),

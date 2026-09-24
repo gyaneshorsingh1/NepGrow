@@ -10,9 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { updateBusinessProfileAction } from "@/features/settings/actions";
+import { slugify } from "@/lib/utils";
 
 type BusinessProfile = {
   name: string;
+  slug: string;
+  categoryDomainSlug: string;
   email: string;
   phone: string | null;
   address: string | null;
@@ -36,6 +39,7 @@ export function BusinessProfileCard({
   const [pending, setPending] = React.useState(false);
   const [form, setForm] = React.useState({
     name: business.name,
+    slug: business.slug,
     email: business.email,
     phone: business.phone ?? "",
     address: business.address ?? "",
@@ -47,6 +51,7 @@ export function BusinessProfileCard({
     if (editing) return;
     setForm({
       name: business.name,
+      slug: business.slug,
       email: business.email,
       phone: business.phone ?? "",
       address: business.address ?? "",
@@ -58,7 +63,10 @@ export function BusinessProfileCard({
   async function onSave(e: React.FormEvent) {
     e.preventDefault();
     setPending(true);
-    const result = await updateBusinessProfileAction(form);
+    const result = await updateBusinessProfileAction({
+      ...form,
+      slug: slugify(form.slug),
+    });
     setPending(false);
     if (!result.ok) {
       toast.error(result.error);
@@ -72,6 +80,7 @@ export function BusinessProfileCard({
   function onCancel() {
     setForm({
       name: business.name,
+      slug: business.slug,
       email: business.email,
       phone: business.phone ?? "",
       address: business.address ?? "",
@@ -95,6 +104,16 @@ export function BusinessProfileCard({
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Business name" value={business.name} />
           <Field label="Category" value={business.categoryName} />
+          <div className="sm:col-span-2">
+            <p className="text-xs text-muted-foreground">Public slug</p>
+            <p className="font-mono text-sm font-medium">{business.slug}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Portal: /portal/{business.slug}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Site: /sites/{business.categoryDomainSlug}/{business.slug}
+            </p>
+          </div>
           <Field label="Email" value={business.email} />
           <Field label="Phone" value={business.phone || "—"} />
           <Field label="Address" value={business.address || "—"} />
@@ -141,6 +160,24 @@ export function BusinessProfileCard({
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="biz-slug">Public slug</Label>
+          <Input
+            id="biz-slug"
+            required
+            value={form.slug}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, slug: slugify(e.target.value) }))
+            }
+            className="font-mono"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="text-xs text-muted-foreground">
+            Must be unique. Used for /portal/{form.slug || "…"} and your public
+            site URL. Changing it breaks old links.
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="biz-email">Email</Label>

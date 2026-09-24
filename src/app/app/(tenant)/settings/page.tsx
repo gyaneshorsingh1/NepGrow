@@ -143,8 +143,12 @@ export default async function SettingsPage() {
             </div>
             <div>
               <p className="text-muted-foreground">Public slug</p>
-              <p className="font-mono text-xs">
-                /sites/{business.category.domainSlug}/{business.slug}
+              <p className="font-mono text-xs">{business.slug}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Edit under{" "}
+                <Link href="/app/business" className="underline underline-offset-2">
+                  Business
+                </Link>
               </p>
             </div>
             <div>

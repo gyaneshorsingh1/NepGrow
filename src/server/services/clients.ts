@@ -44,7 +44,7 @@ export async function createClient(
   let n = 1;
   while (
     await prisma.business.findFirst({
-      where: { categoryId: input.categoryId, slug },
+      where: { slug },
     })
   ) {
     slug = `${baseSlug}-${n++}`;

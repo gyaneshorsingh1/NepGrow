@@ -45,6 +45,8 @@ export default async function BusinessPage() {
             canUpdate={canUpdate}
             business={{
               name: business.name,
+              slug: business.slug,
+              categoryDomainSlug: business.category.domainSlug,
               email: business.email,
               phone: business.phone,
               address: business.address,
