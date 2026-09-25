@@ -154,6 +154,7 @@ export const createCustomerSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional(),
   notes: z.string().optional(),
+  password: z.string().min(8).max(128).optional().or(z.literal("")),
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
 });
 
@@ -196,29 +197,47 @@ export const deleteCourtSchema = z.object({
   id: z.string().min(1),
 });
 
-export const createBookingSchema = z.object({
-  courtId: z.string().min(1),
-  customerId: z.string().optional(),
-  customerName: z.string().optional(),
-  customerEmail: z.string().email().optional().or(z.literal("")),
-  customerPhone: z.string().optional(),
-  startAt: z.string().datetime(),
-  endAt: z.string().datetime(),
-  notes: z.string().optional(),
-  totalCents: z.coerce.number().min(0).default(0),
-  status: z.enum(["PENDING", "CONFIRMED"]).default("CONFIRMED"),
-});
+export const createBookingSchema = z
+  .object({
+    courtId: z.string().optional().or(z.literal("")),
+    staffProfileId: z.string().optional().or(z.literal("")),
+    customerId: z.string().optional(),
+    customerName: z.string().optional(),
+    customerEmail: z.string().email().optional().or(z.literal("")),
+    customerPhone: z.string().optional(),
+    startAt: z.string().datetime(),
+    endAt: z.string().datetime(),
+    notes: z.string().optional(),
+    totalCents: z.coerce.number().min(0).default(0),
+    status: z.enum(["PENDING", "CONFIRMED"]).default("CONFIRMED"),
+  })
+  .refine((v) => Boolean(v.courtId) || Boolean(v.staffProfileId), {
+    message: "Select a court and/or a staff member",
+    path: ["courtId"],
+  });
 
 export const createStaffSchema = z.object({
   name: z.string().min(2).max(120),
-  email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().optional(),
-  title: z.string().optional(),
+  email: z.string().email(),
+  password: z.string().min(8).max(128),
+  roleId: z.string().min(1),
+  phone: z.string().optional().or(z.literal("")),
+  title: z.string().optional().or(z.literal("")),
+  hourlyRateCents: z.coerce.number().min(0).default(0),
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
 });
 
-export const updateStaffSchema = createStaffSchema.extend({
+export const updateStaffSchema = z.object({
   id: z.string().min(1),
+  name: z.string().min(2).max(120),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional().or(z.literal("")),
+  title: z.string().optional().or(z.literal("")),
+  hourlyRateCents: z.coerce.number().min(0).default(0),
+  status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
+  /** Required only when enabling login for a profile that has no user yet */
+  password: z.string().min(8).max(128).optional().or(z.literal("")),
+  roleId: z.string().min(1).optional().or(z.literal("")),
 });
 
 export const createMembershipProductSchema = z.object({

@@ -53,6 +53,7 @@ export async function createCustomerAction(
       email: input.email || undefined,
       phone: input.phone,
       notes: input.notes,
+      password: input.password || undefined,
       status: input.status,
     });
     revalidatePath("/app/customers");
@@ -105,7 +106,8 @@ export async function createBookingAction(
     const ctx = await resolveTenantContext();
     const input = createBookingSchema.parse(raw);
     const booking = await createBooking(ctx, {
-      courtId: input.courtId,
+      courtId: input.courtId || undefined,
+      staffProfileId: input.staffProfileId || undefined,
       customerId: input.customerId,
       customerName: input.customerName,
       customerEmail: input.customerEmail || undefined,
@@ -117,6 +119,7 @@ export async function createBookingAction(
       status: input.status,
     });
     revalidatePath("/app/bookings");
+    revalidatePath("/app/bookings/trainers");
     return { ok: true, data: { id: booking.id } };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
@@ -154,12 +157,16 @@ export async function createStaffAction(
     const input = createStaffSchema.parse(raw);
     const staff = await createStaff(ctx, {
       name: input.name,
-      email: input.email || undefined,
-      phone: input.phone,
-      title: input.title,
+      email: input.email,
+      password: input.password,
+      roleId: input.roleId,
+      phone: input.phone || undefined,
+      title: input.title || undefined,
+      hourlyRateCents: input.hourlyRateCents,
       status: input.status,
     });
     revalidatePath("/app/staff");
+    revalidatePath("/app/staff/profiles");
     return { ok: true, data: { id: staff.id } };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
@@ -175,11 +182,15 @@ export async function updateStaffAction(
     const staff = await updateStaff(ctx, input.id, {
       name: input.name,
       email: input.email || undefined,
-      phone: input.phone,
-      title: input.title,
+      phone: input.phone || undefined,
+      title: input.title || undefined,
+      hourlyRateCents: input.hourlyRateCents,
       status: input.status,
+      password: input.password || undefined,
+      roleId: input.roleId || undefined,
     });
     revalidatePath("/app/staff");
+    revalidatePath("/app/staff/profiles");
     return { ok: true, data: { id: staff.id } };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
@@ -235,6 +246,7 @@ export async function updateCustomerAction(
       email: input.email || undefined,
       phone: input.phone,
       notes: input.notes,
+      password: input.password || undefined,
       status: input.status,
     });
     revalidatePath("/app/customers");

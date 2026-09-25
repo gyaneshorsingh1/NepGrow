@@ -23,10 +23,11 @@ model User {
   isPlatformAdmin Boolean @default(false)
   status          UserStatus @default(ACTIVE)
 
-  sessions    Session[]
-  accounts    Account[]
-  memberships BusinessMembership[]
-  activityLogs ActivityLog[] @relation("ActivityActor")
+  sessions      Session[]
+  accounts      Account[]
+  memberships   BusinessMembership[]
+  activityLogs  ActivityLog[] @relation("ActivityActor")
+  staffProfiles StaffProfile[]
 
   @@map("users")
 }
@@ -491,15 +492,16 @@ model Website {
 // ─── Sports vertical ─────────────────────────────────────────
 
 model Customer {
-  id         String   @id @default(cuid())
-  businessId String
-  name       String
-  email      String?
-  phone      String?
-  notes      String?
-  status     EntityStatus @default(ACTIVE)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String       @id @default(cuid())
+  businessId   String
+  name         String
+  email        String?
+  phone        String?
+  notes        String?
+  passwordHash String?
+  status       EntityStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   bookings    Booking[]
@@ -678,20 +680,23 @@ enum PaymentStatus {
 }
 
 model StaffProfile {
-  id         String   @id @default(cuid())
-  businessId String
-  userId     String?
-  name       String
-  email      String?
-  phone      String?
-  title      String?
-  status     EntityStatus @default(ACTIVE)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id              String       @id @default(cuid())
+  businessId      String
+  userId          String?
+  name            String
+  email           String?
+  phone           String?
+  title           String?
+  hourlyRateCents Float        @default(0)
+  status          EntityStatus @default(ACTIVE)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([businessId])
+  @@index([userId])
   @@map("staff_profiles")
 }
 

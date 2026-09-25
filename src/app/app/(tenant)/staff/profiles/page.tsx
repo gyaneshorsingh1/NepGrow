@@ -18,6 +18,7 @@ import {
   resolveTenantContext,
 } from "@/lib/authorization/context";
 import { prisma } from "@/lib/db";
+import { listAssignableRoles } from "@/server/services/employees";
 
 import { StaffRowActions } from "../staff-row-actions";
 
@@ -39,10 +40,13 @@ export default async function StaffProfilesPage() {
   await requireModule(ctx, "staff");
   await authorize(ctx, "view", "staff", "staff");
 
-  const staff = await prisma.staffProfile.findMany({
-    where: { businessId: ctx.businessId },
-    orderBy: { name: "asc" },
-  });
+  const [staff, roles] = await Promise.all([
+    prisma.staffProfile.findMany({
+      where: { businessId: ctx.businessId },
+      orderBy: { name: "asc" },
+    }),
+    listAssignableRoles(ctx),
+  ]);
 
   const canCreateStaff =
     ctx.ability.can("create", "staff") || ctx.isPlatformAdmin;
@@ -53,7 +57,7 @@ export default async function StaffProfilesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Staff Profiles"
-        description="Operational staff profiles at your center."
+        description="Staff with app logins. Assign roles to control access."
         actions={
           canCreateStaff ? (
             <Button asChild>
@@ -68,25 +72,60 @@ export default async function StaffProfilesPage() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Title</TableHead>
+              <TableHead>Hourly rate</TableHead>
               <TableHead>Contact</TableHead>
+              <TableHead>Login</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {staff.map((s) => (
-              <TableRow key={s.id}>
-                <TableCell className="font-medium">{s.name}</TableCell>
-                <TableCell>{s.title ?? "—"}</TableCell>
-                <TableCell>{s.email || s.phone || "—"}</TableCell>
-                <TableCell>
-                  <StatusBadge status={s.status} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <StaffRowActions staff={s} canUpdate={canUpdateStaff} />
+            {staff.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-muted-foreground">
+                  No staff profiles yet.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              staff.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="font-medium">{s.name}</TableCell>
+                  <TableCell>{s.title ?? "—"}</TableCell>
+                  <TableCell className="tabular-nums">
+                    {s.hourlyRateCents > 0 ? s.hourlyRateCents : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm">{s.email || "—"}</div>
+                    {s.phone ? (
+                      <div className="text-xs text-muted-foreground">
+                        {s.phone}
+                      </div>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    {s.userId ? (
+                      <span className="text-xs font-medium text-primary">
+                        Enabled
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Not set
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={s.status} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <StaffRowActions
+                      staff={s}
+                      canUpdate={canUpdateStaff}
+                      roles={roles}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>

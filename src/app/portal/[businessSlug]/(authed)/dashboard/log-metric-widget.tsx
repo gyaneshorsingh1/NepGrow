@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Activity } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { logProgressMetricAction } from "@/features/programs/actions";
-import { Activity } from "lucide-react";
 
 export function LogMetricWidget({ customerId }: { customerId: string }) {
   const router = useRouter();
@@ -19,13 +21,13 @@ export function LogMetricWidget({ customerId }: { customerId: string }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!metricName || !value || !unit) return;
-    
+
     setPending(true);
     const result = await logProgressMetricAction({
       customerId,
       metricName,
       value: parseFloat(value),
-      unit
+      unit,
     });
     setPending(false);
 
@@ -41,49 +43,59 @@ export function LogMetricWidget({ customerId }: { customerId: string }) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Activity className="w-5 h-5 text-primary" /> Log Progress
+    <Card className="bg-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+          <Activity className="size-5 text-primary" />
+          Log Progress
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5 sm:space-y-4">
           <div className="space-y-2">
-            <label className="text-xs font-medium">Metric (e.g. Weight)</label>
-            <Input 
+            <Label className="text-xs font-medium">Metric (e.g. Weight)</Label>
+            <Input
               value={metricName}
-              onChange={e => setMetricName(e.target.value)}
+              onChange={(e) => setMetricName(e.target.value)}
               placeholder="Body Weight"
               required
               disabled={pending}
+              className="h-10 sm:h-11"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             <div className="space-y-2">
-              <label className="text-xs font-medium">Value</label>
-              <Input 
+              <Label className="text-xs font-medium">Value</Label>
+              <Input
                 type="number"
+                inputMode="decimal"
                 step="0.1"
                 value={value}
-                onChange={e => setValue(e.target.value)}
+                onChange={(e) => setValue(e.target.value)}
                 placeholder="75.5"
                 required
                 disabled={pending}
+                className="h-10 sm:h-11"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium">Unit</label>
-              <Input 
+              <Label className="text-xs font-medium">Unit</Label>
+              <Input
                 value={unit}
-                onChange={e => setUnit(e.target.value)}
+                onChange={(e) => setUnit(e.target.value)}
                 placeholder="kg"
                 required
                 disabled={pending}
+                className="h-10 sm:h-11"
               />
             </div>
           </div>
-          <Button type="submit" className="w-full" size="sm" disabled={pending}>
+          <Button
+            type="submit"
+            className="h-10 w-full sm:h-11"
+            size="sm"
+            disabled={pending}
+          >
             {pending ? "Saving..." : "Save Metric"}
           </Button>
         </form>

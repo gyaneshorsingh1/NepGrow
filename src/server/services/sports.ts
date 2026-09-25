@@ -1,8 +1,11 @@
+import { auth } from "@/lib/auth/auth";
+import { hashPassword } from "@/lib/crypto/password";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { logActivity } from "@/server/services/activity";
 import type { TenantContext } from "@/lib/authorization/context";
 import { authorize, requireModule } from "@/lib/authorization/context";
+import { assertCanAssignRoles } from "@/lib/authorization/guards";
 import { createPaymentGateway } from "@/server/services/payment-gateway";
 import {
   postCashbookPayment,
@@ -25,18 +28,31 @@ export async function createCustomer(
     email?: string;
     phone?: string;
     notes?: string;
+    password?: string;
     status?: "ACTIVE" | "INACTIVE";
   },
 ) {
   await requireModule(ctx, "customers");
   await authorize(ctx, "create", "customers", "customers");
+
+  const email = data.email?.trim().toLowerCase() || null;
+  const password = data.password?.trim();
+  if (password && !email) {
+    throw new AppError(
+      "Email is required when setting a portal password",
+      "VALIDATION",
+      400,
+    );
+  }
+
   const customer = await prisma.customer.create({
     data: {
       businessId: ctx.businessId,
       name: data.name,
-      email: data.email || null,
+      email,
       phone: data.phone,
       notes: data.notes,
+      passwordHash: password ? hashPassword(password) : null,
       status: data.status ?? "ACTIVE",
     },
   });
@@ -59,6 +75,7 @@ export async function updateCustomer(
     email?: string;
     phone?: string;
     notes?: string;
+    password?: string;
     status?: "ACTIVE" | "INACTIVE";
   },
 ) {
@@ -69,14 +86,25 @@ export async function updateCustomer(
   });
   if (!existing) throw new AppError("Customer not found", "NOT_FOUND", 404);
 
+  const email = data.email?.trim().toLowerCase() || null;
+  const password = data.password?.trim();
+  if (password && !email && !existing.email) {
+    throw new AppError(
+      "Email is required when setting a portal password",
+      "VALIDATION",
+      400,
+    );
+  }
+
   const customer = await prisma.customer.update({
     where: { id: customerId },
     data: {
       name: data.name,
-      email: data.email || null,
+      email,
       phone: data.phone,
       notes: data.notes,
       ...(data.status ? { status: data.status } : {}),
+      ...(password ? { passwordHash: hashPassword(password) } : {}),
     },
   });
   await logActivity({
@@ -327,7 +355,8 @@ async function assertNoBookingConflict(
 export async function createBooking(
   ctx: TenantContext,
   data: {
-    courtId: string;
+    courtId?: string;
+    staffProfileId?: string;
     customerId?: string;
     customerName?: string;
     customerEmail?: string;
@@ -342,24 +371,86 @@ export async function createBooking(
   await requireModule(ctx, "bookings");
   await authorize(ctx, "create", "bookings", "bookings");
 
-  const court = await prisma.court.findFirst({
-    where: { id: data.courtId, businessId: ctx.businessId },
-  });
-  if (!court) throw new AppError("Court not found", "NOT_FOUND", 404);
+  const courtId = data.courtId?.trim() || undefined;
+  const staffProfileId = data.staffProfileId?.trim() || undefined;
+  if (!courtId && !staffProfileId) {
+    throw new AppError(
+      "Select a court and/or a staff member",
+      "VALIDATION",
+      400,
+    );
+  }
 
   const startAt = new Date(data.startAt);
   const endAt = new Date(data.endAt);
+  if (!(startAt < endAt)) {
+    throw new AppError("End time must be after start time", "VALIDATION", 400);
+  }
+
+  const court = courtId
+    ? await prisma.court.findFirst({
+        where: { id: courtId, businessId: ctx.businessId },
+      })
+    : null;
+  if (courtId && !court) {
+    throw new AppError("Court not found", "NOT_FOUND", 404);
+  }
+
+  const staff = staffProfileId
+    ? await prisma.staffProfile.findFirst({
+        where: {
+          id: staffProfileId,
+          businessId: ctx.businessId,
+          status: "ACTIVE",
+        },
+      })
+    : null;
+  if (staffProfileId && !staff) {
+    throw new AppError("Staff not found", "NOT_FOUND", 404);
+  }
+
+  const hours =
+    (endAt.getTime() - startAt.getTime()) / (1000 * 60 * 60);
+  const suggestedTotal =
+    ((court?.hourlyRateCents ?? 0) + (staff?.hourlyRateCents ?? 0)) * hours;
+  const totalCents =
+    data.totalCents !== undefined && data.totalCents !== null
+      ? Number(data.totalCents)
+      : suggestedTotal;
 
   return prisma.$transaction(async (tx) => {
-    const conflict = await tx.booking.findFirst({
-      where: {
-        courtId: data.courtId,
-        status: { in: ["PENDING", "CONFIRMED"] },
-        AND: [{ startAt: { lt: endAt } }, { endAt: { gt: startAt } }],
-      },
-    });
-    if (conflict) {
-      throw new AppError("Court is already booked for this time", "CONFLICT", 409);
+    if (courtId) {
+      const courtConflict = await tx.booking.findFirst({
+        where: {
+          courtId,
+          status: { in: ["PENDING", "CONFIRMED"] },
+          AND: [{ startAt: { lt: endAt } }, { endAt: { gt: startAt } }],
+        },
+      });
+      if (courtConflict) {
+        throw new AppError(
+          "Court is already booked for this time",
+          "CONFLICT",
+          409,
+        );
+      }
+    }
+
+    if (staffProfileId) {
+      const staffConflict = await tx.booking.findFirst({
+        where: {
+          staffProfileId,
+          status: { in: ["PENDING", "CONFIRMED"] },
+          AND: [{ startAt: { lt: endAt } }, { endAt: { gt: startAt } }],
+        },
+      });
+      if (staffConflict) {
+        throw new AppError(
+          "Staff is already booked for this time",
+          "CONFLICT",
+          409,
+        );
+      }
     }
 
     let customerId = data.customerId;
@@ -378,12 +469,13 @@ export async function createBooking(
     const booking = await tx.booking.create({
       data: {
         businessId: ctx.businessId,
-        courtId: data.courtId,
+        courtId: courtId ?? null,
+        staffProfileId: staffProfileId ?? null,
         customerId: customerId ?? null,
         startAt,
         endAt,
         notes: data.notes,
-        totalCents: data.totalCents ?? court.hourlyRateCents,
+        totalCents,
         status: data.status ?? "CONFIRMED",
       },
     });
@@ -395,6 +487,11 @@ export async function createBooking(
       module: "bookings",
       entity: "Booking",
       entityId: booking.id,
+      metadata: {
+        courtId: courtId ?? null,
+        staffProfileId: staffProfileId ?? null,
+        totalCents,
+      },
     });
 
     return booking;
@@ -670,24 +767,93 @@ export async function createStaff(
   ctx: TenantContext,
   data: {
     name: string;
-    email?: string;
+    email: string;
+    password: string;
+    roleId: string;
     phone?: string;
     title?: string;
+    hourlyRateCents?: number;
     status?: "ACTIVE" | "INACTIVE";
   },
 ) {
   await requireModule(ctx, "staff");
   await authorize(ctx, "create", "staff", "staff");
-  return prisma.staffProfile.create({
-    data: {
-      businessId: ctx.businessId,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      title: data.title,
-      status: data.status ?? "ACTIVE",
+  await assertCanAssignRoles(ctx, [data.roleId]);
+
+  const email = data.email.trim().toLowerCase();
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) {
+    throw new AppError("Email already in use", "CONFLICT", 409);
+  }
+
+  const signUp = await auth.api.signUpEmail({
+    body: {
+      email,
+      password: data.password,
+      name: data.name.trim(),
     },
   });
+  if (!signUp?.user) {
+    throw new AppError("Failed to create login for staff", "INTERNAL", 500);
+  }
+
+  const profileStatus = data.status ?? "ACTIVE";
+  const membershipStatus = profileStatus === "ACTIVE" ? "ACTIVE" : "DISABLED";
+  const hourlyRateCents = Number(data.hourlyRateCents) || 0;
+
+  try {
+    const staff = await prisma.$transaction(async (tx) => {
+      if (membershipStatus === "DISABLED") {
+        await tx.user.update({
+          where: { id: signUp.user.id },
+          data: { status: "DISABLED" },
+        });
+      }
+
+      await tx.businessMembership.create({
+        data: {
+          userId: signUp.user.id,
+          businessId: ctx.businessId,
+          status: membershipStatus,
+          roles: { create: [{ roleId: data.roleId }] },
+        },
+      });
+
+      return tx.staffProfile.create({
+        data: {
+          businessId: ctx.businessId,
+          userId: signUp.user.id,
+          name: data.name.trim(),
+          email,
+          phone: data.phone?.trim() || null,
+          title: data.title?.trim() || null,
+          hourlyRateCents,
+          status: profileStatus,
+        },
+      });
+    });
+
+    await logActivity({
+      businessId: ctx.businessId,
+      userId: ctx.userId,
+      action: "staff.created",
+      module: "staff",
+      entity: "StaffProfile",
+      entityId: staff.id,
+      metadata: {
+        targetUserId: signUp.user.id,
+        roleId: data.roleId,
+        email,
+        hourlyRateCents,
+      },
+    });
+
+    return staff;
+  } catch (error) {
+    // Best-effort cleanup if membership/profile creation fails after signup
+    await prisma.user.delete({ where: { id: signUp.user.id } }).catch(() => {});
+    throw error;
+  }
 }
 
 export async function updateStaff(
@@ -698,7 +864,10 @@ export async function updateStaff(
     email?: string;
     phone?: string;
     title?: string;
+    hourlyRateCents?: number;
     status?: "ACTIVE" | "INACTIVE";
+    password?: string;
+    roleId?: string;
   },
 ) {
   await requireModule(ctx, "staff");
@@ -708,16 +877,167 @@ export async function updateStaff(
   });
   if (!existing) throw new AppError("Staff not found", "NOT_FOUND", 404);
 
-  return prisma.staffProfile.update({
-    where: { id: staffId },
-    data: {
-      name: data.name,
-      email: data.email || null,
-      phone: data.phone || null,
-      title: data.title || null,
-      ...(data.status ? { status: data.status } : {}),
-    },
+  const name = data.name.trim();
+  const email = data.email?.trim().toLowerCase() || null;
+  const phone = data.phone?.trim() || null;
+  const title = data.title?.trim() || null;
+  const hourlyRateCents =
+    data.hourlyRateCents !== undefined
+      ? Number(data.hourlyRateCents) || 0
+      : existing.hourlyRateCents;
+  const status = data.status;
+
+  // Provision login for profiles that do not have a user yet
+  if (!existing.userId) {
+    const password = data.password?.trim();
+    const roleId = data.roleId?.trim();
+    if (!email) {
+      throw new AppError(
+        "Email is required to enable login",
+        "VALIDATION",
+        400,
+      );
+    }
+    if (!password || password.length < 8) {
+      throw new AppError(
+        "Password (min 8 characters) is required to enable login",
+        "VALIDATION",
+        400,
+      );
+    }
+    if (!roleId) {
+      throw new AppError("Role is required to enable login", "VALIDATION", 400);
+    }
+
+    await assertCanAssignRoles(ctx, [roleId]);
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new AppError("Email already in use", "CONFLICT", 409);
+    }
+
+    const signUp = await auth.api.signUpEmail({
+      body: {
+        email,
+        password,
+        name,
+      },
+    });
+    if (!signUp?.user) {
+      throw new AppError("Failed to create login for staff", "INTERNAL", 500);
+    }
+
+    const profileStatus = status ?? existing.status;
+    const membershipStatus = profileStatus === "ACTIVE" ? "ACTIVE" : "DISABLED";
+
+    try {
+      const staff = await prisma.$transaction(async (tx) => {
+        if (membershipStatus === "DISABLED") {
+          await tx.user.update({
+            where: { id: signUp.user.id },
+            data: { status: "DISABLED" },
+          });
+        }
+
+        await tx.businessMembership.create({
+          data: {
+            userId: signUp.user.id,
+            businessId: ctx.businessId,
+            status: membershipStatus,
+            roles: { create: [{ roleId }] },
+          },
+        });
+
+        return tx.staffProfile.update({
+          where: { id: staffId },
+          data: {
+            userId: signUp.user.id,
+            name,
+            email,
+            phone,
+            title,
+            hourlyRateCents,
+            ...(status ? { status } : {}),
+          },
+        });
+      });
+
+      await logActivity({
+        businessId: ctx.businessId,
+        userId: ctx.userId,
+        action: "staff.login_enabled",
+        module: "staff",
+        entity: "StaffProfile",
+        entityId: staff.id,
+        metadata: { targetUserId: signUp.user.id, roleId, email },
+      });
+
+      return staff;
+    } catch (error) {
+      await prisma.user.delete({ where: { id: signUp.user.id } }).catch(() => {});
+      throw error;
+    }
+  }
+
+  // Already has login: sync profile + linked user (no password change)
+  if (email && email !== existing.email) {
+    const taken = await prisma.user.findFirst({
+      where: { email, NOT: { id: existing.userId } },
+    });
+    if (taken) {
+      throw new AppError("Email already in use", "CONFLICT", 409);
+    }
+  }
+
+  const staff = await prisma.$transaction(async (tx) => {
+    const updated = await tx.staffProfile.update({
+      where: { id: staffId },
+      data: {
+        name,
+        email,
+        phone,
+        title,
+        hourlyRateCents,
+        ...(status ? { status } : {}),
+      },
+    });
+
+    if (existing.userId) {
+      await tx.user.update({
+        where: { id: existing.userId },
+        data: {
+          name,
+          ...(email ? { email } : {}),
+          ...(status
+            ? { status: status === "ACTIVE" ? "ACTIVE" : "DISABLED" }
+            : {}),
+        },
+      });
+
+      if (status) {
+        await tx.businessMembership.updateMany({
+          where: {
+            userId: existing.userId,
+            businessId: ctx.businessId,
+          },
+          data: { status: status === "ACTIVE" ? "ACTIVE" : "DISABLED" },
+        });
+      }
+    }
+
+    return updated;
   });
+
+  await logActivity({
+    businessId: ctx.businessId,
+    userId: ctx.userId,
+    action: "staff.updated",
+    module: "staff",
+    entity: "StaffProfile",
+    entityId: staff.id,
+  });
+
+  return staff;
 }
 
 export async function getSportsReport(ctx: TenantContext) {

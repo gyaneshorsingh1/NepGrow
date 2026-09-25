@@ -7,6 +7,7 @@ import {
   resolveTenantContext,
 } from "@/lib/authorization/context";
 import { AppError } from "@/lib/errors";
+import { listAssignableRoles } from "@/server/services/employees";
 
 import { CreateStaffForm } from "../../create-staff-form";
 
@@ -26,15 +27,17 @@ export default async function NewStaffProfilePage() {
     throw error;
   }
 
+  const roles = await listAssignableRoles(ctx);
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Add staff profile"
-        description="Create an operational staff profile (not an app login)."
+        description="Creates an app login for this staff member. Assign a role to control what they can access."
       />
       <Card>
         <CardContent className="pt-6">
-          <CreateStaffForm />
+          <CreateStaffForm roles={roles} />
         </CardContent>
       </Card>
     </div>

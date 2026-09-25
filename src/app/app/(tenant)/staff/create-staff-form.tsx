@@ -11,9 +11,15 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { createStaffAction } from "@/features/sports/actions";
 
-export function CreateStaffForm() {
+export function CreateStaffForm({
+  roles,
+}: {
+  roles: { id: string; name: string; key: string }[];
+}) {
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
+  const defaultRoleId =
+    roles.find((r) => r.key === "trainer")?.id ?? roles[0]?.id ?? "";
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -21,9 +27,12 @@ export function CreateStaffForm() {
     setPending(true);
     const result = await createStaffAction({
       name: String(fd.get("name") ?? ""),
-      email: String(fd.get("email") ?? "") || undefined,
+      email: String(fd.get("email") ?? ""),
+      password: String(fd.get("password") ?? ""),
+      roleId: String(fd.get("roleId") ?? ""),
       phone: String(fd.get("phone") ?? "") || undefined,
       title: String(fd.get("title") ?? "") || undefined,
+      hourlyRateCents: Number(fd.get("hourlyRateCents") ?? 0),
       status: String(fd.get("status") ?? "ACTIVE"),
     });
     setPending(false);
@@ -31,7 +40,7 @@ export function CreateStaffForm() {
       toast.error(result.error);
       return;
     }
-    toast.success("Staff member added");
+    toast.success("Staff profile and login created");
     router.push("/app/staff/profiles");
     router.refresh();
   }
@@ -44,8 +53,38 @@ export function CreateStaffForm() {
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" />
+          <Label htmlFor="email">Login email</Label>
+          <Input id="email" name="email" type="email" required />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            minLength={8}
+            required
+            autoComplete="new-password"
+          />
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="roleId">App role</Label>
+          <Select id="roleId" name="roleId" defaultValue={defaultRoleId} required>
+            {roles.length === 0 ? (
+              <option value="">No roles available</option>
+            ) : (
+              roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))
+            )}
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Controls what they can see after signing in at /app/login.
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="phone">Phone</Label>
@@ -58,6 +97,22 @@ export function CreateStaffForm() {
           <Input id="title" name="title" placeholder="Coach, Front desk…" />
         </div>
         <div className="space-y-2">
+          <Label htmlFor="hourlyRateCents">Hourly rate</Label>
+          <Input
+            id="hourlyRateCents"
+            name="hourlyRateCents"
+            type="number"
+            min={0}
+            step="0.01"
+            defaultValue={0}
+          />
+          <p className="text-xs text-muted-foreground">
+            Used when customers book this staff member.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
           <Label htmlFor="status">Status</Label>
           <Select id="status" name="status" defaultValue="ACTIVE">
             <option value="ACTIVE">Active</option>
@@ -69,7 +124,7 @@ export function CreateStaffForm() {
         <Button asChild type="button" variant="outline" disabled={pending}>
           <Link href="/app/staff/profiles">Cancel</Link>
         </Button>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending || roles.length === 0}>
           {pending ? "Saving…" : "Add staff"}
         </Button>
       </div>

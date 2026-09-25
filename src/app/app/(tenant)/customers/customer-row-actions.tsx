@@ -52,6 +52,7 @@ export function CustomerRowActions({
   const [phone, setPhone] = React.useState(customer.phone ?? "");
   const [notes, setNotes] = React.useState(customer.notes ?? "");
   const [status, setStatus] = React.useState(customer.status);
+  const [password, setPassword] = React.useState("");
 
   React.useEffect(() => {
     if (!open) return;
@@ -60,6 +61,7 @@ export function CustomerRowActions({
     setPhone(customer.phone ?? "");
     setNotes(customer.notes ?? "");
     setStatus(customer.status);
+    setPassword("");
   }, [open, customer]);
 
   function onSave(event: React.FormEvent) {
@@ -72,6 +74,7 @@ export function CustomerRowActions({
         phone,
         notes,
         status,
+        password: password || undefined,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -137,6 +140,20 @@ export function CustomerRowActions({
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`customer-password-${customer.id}`}>
+                    Portal password
+                  </Label>
+                  <Input
+                    id={`customer-password-${customer.id}`}
+                    type="password"
+                    minLength={8}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Leave blank to keep current"
+                    autoComplete="new-password"
                   />
                 </div>
                 <div className="space-y-2">

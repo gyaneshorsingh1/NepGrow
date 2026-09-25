@@ -23,7 +23,14 @@ export function CreateCustomerForm() {
   const [pending, setPending] = React.useState(false);
   const form = useForm<Values>({
     resolver: zodResolver(createCustomerSchema) as Resolver<Values>,
-    defaultValues: { name: "", email: "", phone: "", notes: "", status: "ACTIVE" },
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      notes: "",
+      password: "",
+      status: "ACTIVE",
+    },
   });
 
   async function onSubmit(values: Values) {
@@ -51,6 +58,19 @@ export function CreateCustomerForm() {
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input id="email" type="email" {...form.register("email")} />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="password">Portal password</Label>
+        <Input
+          id="password"
+          type="password"
+          minLength={8}
+          autoComplete="new-password"
+          {...form.register("password")}
+        />
+        <p className="text-xs text-muted-foreground">
+          Optional. Required for customer portal login (with email).
+        </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="phone">Phone</Label>
